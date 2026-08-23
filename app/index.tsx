@@ -65,13 +65,15 @@ export default function CameraScreen() {
         autofocus="on"
       />
       <View style={styles.controls}>
-        <TouchableOpacity style={styles.iconButton} onPress={flipCamera} activeOpacity={0.7}>
-          <Text style={styles.iconText}>🔄</Text>
+        <TouchableOpacity style={styles.iconButton} onPress={() => router.push("/historico")} activeOpacity={0.7}>
+          <Text style={styles.iconText}>📋</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.captureButton} onPress={takePicture} activeOpacity={0.7}>
           <View style={styles.captureInner} />
         </TouchableOpacity>
-        <View style={styles.spacer} />
+        <TouchableOpacity style={styles.iconButton} onPress={flipCamera} activeOpacity={0.7}>
+          <Text style={styles.iconText}>🔄</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );

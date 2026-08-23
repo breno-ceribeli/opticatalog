@@ -19,4 +19,4 @@ npx tsc --noEmit   # Typecheck
 ```
 
 ## Fase atual
-**Fase 1 — Câmera funcionando** (`roadmap-desenvolvimento.md:40`). Objetivo: tirar foto, preview, navegar para revisão.
+**Fase 2 — SQLite funcionando** (`roadmap-desenvolvimento.md:56`). Objetivo: salvar foto como registro `pendente`, listar histórico de análises.

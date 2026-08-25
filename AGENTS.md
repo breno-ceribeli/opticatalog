@@ -3,6 +3,7 @@
 ## Leia nesta ordem
 1. `docs/documentacao-projeto.md` — arquitetura, schema, fluxos, decisões
 2. `docs/roadmap-desenvolvimento.md` — 9 fases operacionais com critérios de pronto
+3. `docs/cloud-vision-api.md` — integração Cloud Vision (Label Detection + Object Localization + OCR)
 
 ## Regras arquiteturais (não violar)
 - **ID client-side** (`crypto.randomUUID()`) — mesmo ID no SQLite e Supabase (upsert direto)
@@ -19,4 +20,4 @@ npx tsc --noEmit   # Typecheck
 ```
 
 ## Fase atual
-**Fase 2 — SQLite funcionando** (`roadmap-desenvolvimento.md:56`). Objetivo: salvar foto como registro `pendente`, listar histórico de análises.
+**Fase 3 — Integração com a Cloud Vision** (`roadmap-desenvolvimento.md:75`). Objetivo: enviar foto pendente pra API e salvar resultado (objeto + labels). Ver `docs/cloud-vision-api.md`.

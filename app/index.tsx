@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, Alert } from "react-native";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -41,13 +43,49 @@ export default function CameraScreen() {
 
   const takePicture = async () => {
     if (cameraRef.current) {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: false,
-        exif: false,
-      });
-      if (photo) {
-        router.push({ pathname: "/preview", params: { uri: photo.uri } } as any);
+      try {
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.8,
+          base64: false,
+          exif: false,
+        });
+        if (photo) {
+          // Salvar imediatamente em local permanente para evitar erro de cache
+          console.log("[Camera] documentDirectory:", FileSystem.documentDirectory);
+          const dir = `${FileSystem.documentDirectory}fotos/`;
+          console.log("[Camera] Target dir:", dir);
+          const dirInfo = await FileSystem.getInfoAsync(dir);
+          if (!dirInfo.exists) {
+            await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+          }
+
+          const filename = `foto_${Date.now()}.jpg`;
+          const destUri = `${dir}${filename}`;
+
+          const manipulated = await ImageManipulator.manipulateAsync(
+            photo.uri,
+            [{ resize: { width: 1280 } }],
+            { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: false }
+          );
+
+          await FileSystem.moveAsync({
+            from: manipulated.uri,
+            to: destUri,
+          });
+
+          // Verificar se arquivo foi criado corretamente
+          const fileInfo = await FileSystem.getInfoAsync(destUri);
+          console.log("[Camera] File moved:", { destUri, exists: fileInfo.exists });
+          console.log("[Camera] Source URI was:", manipulated.uri);
+          if (!fileInfo.exists) {
+            throw new Error("Falha ao mover arquivo para diretório permanente");
+          }
+
+          router.push({ pathname: "/preview", params: { uri: destUri } } as any);
+        }
+      } catch (error) {
+        console.error("Erro ao processar foto:", error);
+        Alert.alert("Erro", "Não foi possível processar a foto");
       }
     }
   };

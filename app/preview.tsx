@@ -2,59 +2,63 @@ import { useState, useEffect, useRef } from "react";
 import { StyleSheet, View, Image, TouchableOpacity, Text, Alert } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
-import * as ImageManipulator from "expo-image-manipulator";
-import { criarAnalise } from "../src/db/queries";
+import { criarAnalise, atualizarAnalise } from "../src/db/queries";
+import NetInfo from "@react-native-community/netinfo";
+import { analisarImagem } from "../src/services/visionApi";
 
 export default function PreviewScreen() {
   const { uri } = useLocalSearchParams<{ uri: string }>();
   const [saving, setSaving] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const uriRef = useRef(uri);
+  const photoUsedRef = useRef(false);
 
   useEffect(() => {
     uriRef.current = uri;
   }, [uri]);
 
+  // Cleanup só no unmount real da tela
   useEffect(() => {
     return () => {
-      if (!confirmed && uriRef.current) {
+      if (!photoUsedRef.current && uriRef.current) {
         FileSystem.deleteAsync(uriRef.current, { idempotent: true })
           .catch((e) => console.warn("Cleanup temp photo failed:", e));
       }
     };
-  }, [confirmed]);
+  }, []);
 
   const handleUsarFoto = async () => {
     if (!uri) return;
     setSaving(true);
-    setConfirmed(true);
+    photoUsedRef.current = true;
     try {
-      const dir = `${FileSystem.documentDirectory}fotos/`;
-      const dirInfo = await FileSystem.getInfoAsync(dir);
-      if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+      const id = criarAnalise({ imagem_uri: uri, status: "pendente" });
+
+      // Verificar conectividade e chamar API se online
+      const netInfo = await NetInfo.fetch();
+      if (netInfo.isConnected && netInfo.isInternetReachable) {
+        setAnalyzing(true);
+        try {
+          const result = await analisarImagem(uri, id);
+          atualizarAnalise(id, {
+            objeto_detectado: result.objetoPrincipal,
+            labels_json: JSON.stringify(result.labels),
+            status: "processado",
+          });
+        } catch {
+          atualizarAnalise(id, { status: "erro" });
+        } finally {
+          setAnalyzing(false);
+        }
+      } else {
+        console.log("[Preview] Offline - analysis queued as pendente", { id });
       }
 
-      const filename = `foto_${Date.now()}.jpg`;
-      const destUri = `${dir}${filename}`;
-
-      const manipulated = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ resize: { width: 1280 } }],
-        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: false }
-      );
-
-      await FileSystem.moveAsync({
-        from: manipulated.uri,
-        to: destUri,
-      });
-
-      const id = criarAnalise({ imagem_uri: destUri, status: "pendente" });
-      router.push({ pathname: "/revisao", params: { uri: destUri, analysisId: id } } as any);
+      router.push({ pathname: "/revisao", params: { uri, analysisId: id } } as any);
     } catch (error) {
       console.error("Erro ao salvar foto:", error);
       Alert.alert("Erro", "Não foi possível salvar a foto");
-      setConfirmed(false);
+      photoUsedRef.current = false;
     } finally {
       setSaving(false);
     }
@@ -65,7 +69,7 @@ export default function PreviewScreen() {
       try {
         await FileSystem.deleteAsync(uri, { idempotent: true });
       } catch (error) {
-        console.warn("Erro ao limpar foto temporária:", error);
+        console.warn("Erro ao limpar foto:", error);
       }
     }
     router.back();
@@ -83,11 +87,13 @@ export default function PreviewScreen() {
     <View style={styles.container}>
       <Image source={{ uri }} style={styles.image} />
       <View style={styles.buttonRow}>
-        <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={handleTirarDeNovo} activeOpacity={0.7} disabled={saving}>
+        <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={handleTirarDeNovo} activeOpacity={0.7} disabled={saving || analyzing}>
           <Text style={styles.buttonTextSecondary}>Tirar de novo</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, styles.buttonPrimary]} onPress={handleUsarFoto} activeOpacity={0.7} disabled={saving}>
-          <Text style={styles.buttonTextPrimary}>{saving ? "Salvando..." : "Usar esta foto"}</Text>
+        <TouchableOpacity style={[styles.button, styles.buttonPrimary]} onPress={handleUsarFoto} activeOpacity={0.7} disabled={saving || analyzing}>
+          <Text style={styles.buttonTextPrimary}>
+            {saving ? "Salvando..." : analyzing ? "Analisando..." : "Usar esta foto"}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>

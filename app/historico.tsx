@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert } from "react-native";
 import { router } from "expo-router";
-import { listarAnalises, Analise, excluirAnalise } from "../src/db/queries";
+import { listarAnalises, Analise, excluirAnalise, reanalisarAnalise } from "../src/db/queries";
 
 export default function HistoricoScreen() {
   const [analises, setAnalises] = useState<Analise[]>([]);
   const [loading, setLoading] = useState(true);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
 
   useEffect(() => {
     carregarAnalises();
@@ -69,6 +70,23 @@ export default function HistoricoScreen() {
     );
   };
 
+  const handleAnalisar = async (item: Analise) => {
+    if (analyzingId) return;
+    setAnalyzingId(item.id);
+    try {
+      const result = await reanalisarAnalise(item.id);
+      if (result.success) {
+        carregarAnalises();
+      } else {
+        Alert.alert("Erro na análise", result.error ?? "Erro desconhecido");
+      }
+    } catch (error: any) {
+      Alert.alert("Erro", error.message);
+    } finally {
+      setAnalyzingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -113,6 +131,18 @@ export default function HistoricoScreen() {
                   <Text style={styles.cardObject}>{item.objeto_detectado}</Text>
                 )}
                 <Text style={styles.cardId}>ID: {item.id.slice(0, 8)}...</Text>
+                {item.status === "pendente" && (
+                  <TouchableOpacity
+                    style={styles.analyzeButton}
+                    onPress={() => handleAnalisar(item)}
+                    disabled={analyzingId === item.id}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.analyzeButtonText}>
+                      {analyzingId === item.id ? "Analisando..." : "Analisar agora"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </TouchableOpacity>
@@ -220,6 +250,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#999",
     fontFamily: "monospace",
+  },
+  analyzeButton: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#2196f3",
+    borderRadius: 6,
+    alignSelf: "flex-start",
+  },
+  analyzeButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
   },
   separator: {
     height: 12,

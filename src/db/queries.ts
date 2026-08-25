@@ -1,5 +1,7 @@
 import { db } from "./schema";
 import * as FileSystem from "expo-file-system/legacy";
+import NetInfo from "@react-native-community/netinfo";
+import { analisarImagem } from "../services/visionApi";
 
 function generateUUID(): string {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -127,4 +129,28 @@ export async function excluirAnalise(id: string): Promise<boolean> {
 
   db.runSync(`DELETE FROM analises WHERE id = ?`, [id]);
   return true;
+}
+
+export async function reanalisarAnalise(id: string): Promise<{ success: boolean; error?: string }> {
+  const analise = obterAnalise(id);
+  if (!analise) return { success: false, error: "Análise não encontrada" };
+
+  const netInfo = await NetInfo.fetch();
+  if (!netInfo.isConnected || !netInfo.isInternetReachable) {
+    return { success: false, error: "Sem conexão com a internet" };
+  }
+
+  try {
+    atualizarAnalise(id, { status: "pendente" });
+    const result = await analisarImagem(analise.imagem_uri, id);
+    atualizarAnalise(id, {
+      objeto_detectado: result.objetoPrincipal,
+      labels_json: JSON.stringify(result.labels),
+      status: "processado",
+    });
+    return { success: true };
+  } catch (error: any) {
+    atualizarAnalise(id, { status: "erro" });
+    return { success: false, error: error.message };
+  }
 }

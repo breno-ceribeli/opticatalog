@@ -58,6 +58,65 @@ function parseResponse(data: any): VisionResult {
   return { objetoPrincipal, labels };
 }
 
+export async function lerTextoOcr(uri: string, analysisId: string): Promise<string | null> {
+  if (!API_KEY) {
+    const error = new Error("Chave da API Google Vision não configurada");
+    (error as any).code = 500;
+    throw error;
+  }
+
+  console.log("[VisionAPI] OCR Request started", { analysisId, uri });
+
+  try {
+    const base64 = await imageToBase64(uri);
+    console.log("[VisionAPI] OCR Image converted to base64", { analysisId, length: base64.length });
+
+    const response = await fetch(
+      `https://vision.googleapis.com/v1/images:annotate?key=${API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requests: [
+            {
+              image: { content: base64 },
+              features: [{ type: "TEXT_DETECTION" }],
+            },
+          ],
+        }),
+      }
+    );
+
+    console.log("[VisionAPI] OCR HTTP response", { analysisId, status: response.status });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const errorMsg = data.error?.message ?? `HTTP ${response.status}`;
+      console.error("[VisionAPI] OCR API Error", { analysisId, status: response.status, error: errorMsg });
+      const error = new Error(errorMsg);
+      (error as any).code = response.status;
+      throw error;
+    }
+
+    if (data.responses?.[0]?.error) {
+      const apiError = data.responses[0].error;
+      console.error("[VisionAPI] OCR API Response Error", { analysisId, error: apiError });
+      const error = new Error(apiError.message);
+      (error as any).code = apiError.code;
+      throw error;
+    }
+
+    const textoOcr = data.responses?.[0]?.textAnnotations?.[0]?.description ?? null;
+    console.log("[VisionAPI] OCR Success", { analysisId, hasText: !!textoOcr, textLength: textoOcr?.length ?? 0 });
+
+    return textoOcr;
+  } catch (error: any) {
+    console.error("[VisionAPI] OCR Failed", { analysisId, error: error.message, code: error.code });
+    throw error;
+  }
+}
+
 export async function analisarImagem(uri: string, analysisId: string): Promise<VisionResult> {
   if (!API_KEY) {
     const error = new Error("Chave da API Google Vision não configurada");

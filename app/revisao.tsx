@@ -1,8 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Alert } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { obterAnalise, atualizarAnalise, Analise } from "../src/db/queries";
-import { analisarImagem } from "../src/services/visionApi";
+import {
+  obterAnalise,
+  atualizarAnalise,
+  criarItemInventario,
+  obterItemPorAnalise,
+  atualizarItemInventario,
+  Analise,
+  ItemInventario,
+} from "../src/db/queries";
+import { analisarImagem, lerTextoOcr } from "../src/services/visionApi";
 import NetInfo from "@react-native-community/netinfo";
 
 export default function RevisaoScreen() {
@@ -10,18 +18,30 @@ export default function RevisaoScreen() {
   const [analise, setAnalise] = useState<Analise | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [readingText, setReadingText] = useState(false);
   const [nome, setNome] = useState("");
   const [categoria, setCategoria] = useState("");
   const [tags, setTags] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [itemExistente, setItemExistente] = useState<ItemInventario | null>(null);
 
   const carregarAnalise = useCallback(() => {
     if (!analysisId) return;
     const dados = obterAnalise(analysisId);
     setAnalise(dados);
-    if (dados) {
+
+    const item = obterItemPorAnalise(analysisId);
+    setItemExistente(item);
+
+    if (item) {
+      setNome(item.nome);
+      setCategoria(item.categoria);
+      setTags(item.tags_json ? JSON.parse(item.tags_json).join(", ") : "");
+      setDescricao(item.descricao ?? item.identificador_ocr ?? "");
+    } else if (dados) {
       setNome(dados.objeto_detectado ?? "");
       setTags(dados.labels_json ? JSON.parse(dados.labels_json).map((l: any) => l.name).join(", ") : "");
+      setDescricao(dados.texto_ocr ?? "");
     }
     setLoading(false);
   }, [analysisId]);
@@ -58,13 +78,60 @@ export default function RevisaoScreen() {
     }
   };
 
+  const handleLerTexto = async () => {
+    if (!analise || !uri) return;
+    const netInfo = await NetInfo.fetch();
+    if (!netInfo.isConnected || !netInfo.isInternetReachable) {
+      Alert.alert("Sem internet", "Conecte-se à internet para ler texto da imagem.");
+      return;
+    }
+    setReadingText(true);
+    try {
+      const texto = await lerTextoOcr(uri, analysisId);
+      if (texto) {
+        setDescricao(texto);
+        atualizarAnalise(analysisId, { texto_ocr: texto });
+        Alert.alert("Texto extraído", "O texto foi preenchido no campo Descrição. Você pode editá-lo antes de salvar.");
+      } else {
+        Alert.alert("Nenhum texto encontrado", "A IA não detectou nenhum texto na imagem.");
+      }
+    } catch (error: any) {
+      console.error("[Revisao] OCR error:", error);
+      Alert.alert("Erro na leitura", error.message);
+    } finally {
+      setReadingText(false);
+    }
+  };
+
   const handleSalvar = () => {
     if (!categoria.trim()) {
       Alert.alert("Categoria obrigatória", "Por favor, defina uma categoria para o item.");
       return;
     }
-    // Aqui entraria a lógica de confirmar no inventário (Fase 4/5)
-    Alert.alert("Salvar", `Item salvo:\n${nome}\nCategoria: ${categoria}\nTags: ${tags}\nDescrição: ${descricao}`);
+    try {
+      const dadosItem = {
+        nome: nome.trim() || "Sem nome",
+        categoria: categoria.trim(),
+        tags_json: tags.trim() ? JSON.stringify(tags.split(",").map((t) => t.trim())) : undefined,
+        descricao: descricao.trim() || undefined,
+      };
+
+      if (itemExistente) {
+        atualizarItemInventario(itemExistente.id, dadosItem);
+        Alert.alert("Item atualizado", "Os dados do item foram atualizados no inventário.");
+      } else {
+        criarItemInventario({
+          analise_origem_id: analysisId,
+          ...dadosItem,
+        });
+        Alert.alert("Item salvo", "Item adicionado ao inventário com sucesso.");
+      }
+
+      setItemExistente(obterItemPorAnalise(analysisId));
+    } catch (error: any) {
+      console.error("[Revisao] Erro ao salvar item:", error);
+      Alert.alert("Erro", "Não foi possível salvar o item no inventário.");
+    }
   };
 
   if (loading || !analise) {
@@ -99,6 +166,15 @@ export default function RevisaoScreen() {
         {(analise.status === "erro" || analise.status === "pendente") && (
           <TouchableOpacity style={styles.retryButton} onPress={handleReanalisar} disabled={analyzing}>
             <Text style={styles.retryButtonText}>{analyzing ? "Analisando..." : "Analisar agora"}</Text>
+          </TouchableOpacity>
+        )}
+        {analise.texto_ocr ? (
+          <View style={[styles.ocrButton, styles.ocrButtonDone]}>
+            <Text style={styles.ocrButtonText}>Texto já lido</Text>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.ocrButton} onPress={handleLerTexto} disabled={readingText}>
+            <Text style={styles.ocrButtonText}>{readingText ? "Lendo..." : "Ler texto"}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -145,9 +221,12 @@ export default function RevisaoScreen() {
         />
       </View>
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSalvar} activeOpacity={0.7}>
-        <Text style={styles.saveButtonText}>Salvar no inventário</Text>
+      <TouchableOpacity style={[styles.saveButton, itemExistente && styles.saveButtonUpdate]} onPress={handleSalvar} activeOpacity={0.7}>
+        <Text style={styles.saveButtonText}>{itemExistente ? "Atualizar item" : "Salvar no inventário"}</Text>
       </TouchableOpacity>
+      {itemExistente && (
+        <Text style={styles.itemSavedHint}>Este item já foi salvo no inventário.</Text>
+      )}
     </ScrollView>
   );
 }
@@ -205,6 +284,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 14,
   },
+  ocrButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#9c27b0",
+    borderRadius: 8,
+  },
+  ocrButtonDone: {
+    backgroundColor: "#999",
+  },
+  ocrButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
   section: {
     marginBottom: 20,
   },
@@ -236,9 +329,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
+  saveButtonUpdate: {
+    backgroundColor: "#ff9800",
+  },
   saveButtonText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "600",
+  },
+  itemSavedHint: {
+    fontSize: 13,
+    color: "#999",
+    textAlign: "center",
+    marginTop: 8,
   },
 });

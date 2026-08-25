@@ -131,6 +131,99 @@ export async function excluirAnalise(id: string): Promise<boolean> {
   return true;
 }
 
+export function criarItemInventario(dados: {
+  analise_origem_id: string;
+  nome: string;
+  categoria: string;
+  tags_json?: string;
+  descricao?: string;
+  identificador_ocr?: string;
+  quantidade?: number;
+}): string {
+  const id = generateUUID();
+  const agora = Date.now();
+
+  db.runSync(
+    `INSERT INTO itens_inventario (id, analise_origem_id, nome, categoria, tags_json, descricao, identificador_ocr, quantidade, criado_em, atualizado_em, sincronizado)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+    [
+      id,
+      dados.analise_origem_id,
+      dados.nome,
+      dados.categoria,
+      dados.tags_json ?? null,
+      dados.descricao ?? null,
+      dados.identificador_ocr ?? null,
+      dados.quantidade ?? 1,
+      agora,
+      agora,
+    ]
+  );
+
+  return id;
+}
+
+export function listarItensInventario(): ItemInventario[] {
+  return db.getAllSync<ItemInventario>(
+    `SELECT * FROM itens_inventario ORDER BY criado_em DESC`
+  );
+}
+
+export function obterItemPorAnalise(analiseId: string): ItemInventario | null {
+  return db.getFirstSync<ItemInventario>(
+    `SELECT * FROM itens_inventario WHERE analise_origem_id = ?`,
+    [analiseId]
+  ) ?? null;
+}
+
+export function atualizarItemInventario(
+  id: string,
+  dados: Partial<Pick<ItemInventario, "nome" | "categoria" | "tags_json" | "descricao" | "identificador_ocr" | "quantidade">>
+): void {
+  const campos: string[] = [];
+  const valores: (string | null)[] = [];
+
+  if (dados.nome !== undefined) {
+    campos.push("nome = ?");
+    valores.push(dados.nome);
+  }
+  if (dados.categoria !== undefined) {
+    campos.push("categoria = ?");
+    valores.push(dados.categoria);
+  }
+  if (dados.tags_json !== undefined) {
+    campos.push("tags_json = ?");
+    valores.push(dados.tags_json);
+  }
+  if (dados.descricao !== undefined) {
+    campos.push("descricao = ?");
+    valores.push(dados.descricao);
+  }
+  if (dados.identificador_ocr !== undefined) {
+    campos.push("identificador_ocr = ?");
+    valores.push(dados.identificador_ocr);
+  }
+  if (dados.quantidade !== undefined) {
+    campos.push("quantidade = ?");
+    valores.push(String(dados.quantidade));
+  }
+
+  if (campos.length === 0) return;
+
+  const agora = Date.now();
+  campos.push("atualizado_em = ?");
+  valores.push(String(agora));
+  campos.push("sincronizado = 0");
+
+  valores.push(id);
+  db.runSync(`UPDATE itens_inventario SET ${campos.join(", ")} WHERE id = ?`, valores);
+}
+
+export function excluirItemInventario(id: string): boolean {
+  db.runSync(`DELETE FROM itens_inventario WHERE id = ?`, [id]);
+  return true;
+}
+
 export async function reanalisarAnalise(id: string): Promise<{ success: boolean; error?: string }> {
   const analise = obterAnalise(id);
   if (!analise) return { success: false, error: "Análise não encontrada" };

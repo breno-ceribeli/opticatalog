@@ -8,7 +8,7 @@
 ## Regras arquiteturais (não violar)
 - **ID client-side** (`crypto.randomUUID()`) — mesmo ID no SQLite e Supabase (upsert direto)
 - **Categoria sempre manual** — IA não sugere; usuário define na confirmação
-- **Duplicado só por OCR** — sem texto lido, não adivinha; só mostra contagem por categoria
+- **Duplicado só por OCR** — sem texto lido, não adivinha; só mostra contagem por categoria (checagem de duplicado via OCR será implementada no futuro)
 - **Offline-first real** — captura/salva local sempre; análise (Cloud Vision) fila se offline
 - **Chave Cloud Vision no app** — MVP consciente; migrar para Edge Function depois
 
@@ -20,4 +20,4 @@ npx tsc --noEmit   # Typecheck
 ```
 
 ## Fase atual
-**Fase 3 — Integração com a Cloud Vision** (`roadmap-desenvolvimento.md:75`). Objetivo: enviar foto pendente pra API e salvar resultado (objeto + labels). Ver `docs/cloud-vision-api.md`.
+**Fase 5 — OCR (Text Detection)** (`roadmap-desenvolvimento.md:109`). Objetivo: botão "Ler texto" na revisão → chamada TEXT_DETECTION separada → preencher campo descrição com texto extraído.

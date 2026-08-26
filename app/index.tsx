@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, Alert } from "react-native";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -41,6 +42,35 @@ export default function CameraScreen() {
     );
   }
 
+  const processAndNavigate = async (sourceUri: string) => {
+    const dir = `${FileSystem.documentDirectory}fotos/`;
+    const dirInfo = await FileSystem.getInfoAsync(dir);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    }
+
+    const filename = `foto_${Date.now()}.jpg`;
+    const destUri = `${dir}${filename}`;
+
+    const manipulated = await ImageManipulator.manipulateAsync(
+      sourceUri,
+      [{ resize: { width: 1280 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: false }
+    );
+
+    await FileSystem.moveAsync({
+      from: manipulated.uri,
+      to: destUri,
+    });
+
+    const fileInfo = await FileSystem.getInfoAsync(destUri);
+    if (!fileInfo.exists) {
+      throw new Error("Falha ao mover arquivo para diretório permanente");
+    }
+
+    router.push({ pathname: "/preview", params: { uri: destUri } } as any);
+  };
+
   const takePicture = async () => {
     if (cameraRef.current) {
       try {
@@ -50,43 +80,30 @@ export default function CameraScreen() {
           exif: false,
         });
         if (photo) {
-          // Salvar imediatamente em local permanente para evitar erro de cache
-          console.log("[Camera] documentDirectory:", FileSystem.documentDirectory);
-          const dir = `${FileSystem.documentDirectory}fotos/`;
-          console.log("[Camera] Target dir:", dir);
-          const dirInfo = await FileSystem.getInfoAsync(dir);
-          if (!dirInfo.exists) {
-            await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-          }
-
-          const filename = `foto_${Date.now()}.jpg`;
-          const destUri = `${dir}${filename}`;
-
-          const manipulated = await ImageManipulator.manipulateAsync(
-            photo.uri,
-            [{ resize: { width: 1280 } }],
-            { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: false }
-          );
-
-          await FileSystem.moveAsync({
-            from: manipulated.uri,
-            to: destUri,
-          });
-
-          // Verificar se arquivo foi criado corretamente
-          const fileInfo = await FileSystem.getInfoAsync(destUri);
-          console.log("[Camera] File moved:", { destUri, exists: fileInfo.exists });
-          console.log("[Camera] Source URI was:", manipulated.uri);
-          if (!fileInfo.exists) {
-            throw new Error("Falha ao mover arquivo para diretório permanente");
-          }
-
-          router.push({ pathname: "/preview", params: { uri: destUri } } as any);
+          await processAndNavigate(photo.uri);
         }
       } catch (error) {
         console.error("Erro ao processar foto:", error);
         Alert.alert("Erro", "Não foi possível processar a foto");
       }
+    }
+  };
+
+  const pickFromGallery = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: false,
+        quality: 0.8,
+        exif: false,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await processAndNavigate(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error("Erro ao selecionar imagem:", error);
+      Alert.alert("Erro", "Não foi possível selecionar a imagem");
     }
   };
 
@@ -105,6 +122,9 @@ export default function CameraScreen() {
       <View style={styles.controls}>
         <TouchableOpacity style={styles.iconButton} onPress={() => router.push("/historico")} activeOpacity={0.7}>
           <Text style={styles.iconText}>📋</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.iconButton} onPress={pickFromGallery} activeOpacity={0.7}>
+          <Text style={styles.iconText}>🖼️</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.captureButton} onPress={takePicture} activeOpacity={0.7}>
           <View style={styles.captureInner} />

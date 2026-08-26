@@ -136,16 +136,25 @@ Checklist resumido — detalhes completos no outro documento:
 
 **Arquivos:** `src/services/supabase.ts`, `src/services/sync.ts`
 
-**O que implementar:**
+**O que foi implementado:**
 
-1. `supabase.ts`: criar o client (`createClient` com URL/key do `.env`, configurado com `AsyncStorage` para persistência).
-2. `sync.ts`: função `sincronizar()` que:
-   - Usa `NetInfo.fetch()` para checar conexão.
-   - Busca em `analises` e `itens_inventario` os registros com `sincronizado = 0`.
-   - Para cada análise pendente com imagem local ainda não enviada: faz upload ao bucket `fotos-inventario` do Supabase Storage, obtém a URL pública.
-   - Faz upsert dos registros no Supabase (usando o mesmo `id` local), incluindo `imagem_url`.
-   - Marca `sincronizado = 1` localmente após sucesso.
-3. Disparar `sincronizar()`: ao detectar mudança de conectividade (listener do `NetInfo`) e/ou com um botão manual "Sincronizar agora" na tela de histórico.
+1. `supabase.ts`: cliente Supabase inicializado com `createClient` + `AsyncStorage` para persistência.
+2. `sync.ts`: motor de sincronização completo:
+   - `sincronizarTudo()`: busca registros com `sincronizado = 0`, faz upload de imagens, upsert no Supabase, marca como sincronizado.
+   - `baixarItensRemotos()`: busca itens do Supabase, cria stubs de análise local, baixa imagens, insere localmente.
+   - `excluirRemoto()`: deleta do Supabase (tabelas + Storage).
+   - Mapeamento de colunas: `labels_json`→`labels`, `tags_json`→`tags`, timestamps INTEGER→ISO.
+   - Upload de imagens: base64 → ArrayBuffer → `supabase.storage.upload()` → URL pública.
+   - Download de imagens: `FileSystem.downloadAsync()` → salva localmente.
+3. `app/_layout.tsx`: listener NetInfo → sync automático ao reconectar + sync inicial ao abrir o app.
+4. `app/historico.tsx`: UI completa de sincronização:
+   - Indicador "Sincronizado"/"Nao sincronizado" em cada card.
+   - Toggle "Nao sincronizados" para filtrar.
+   - Botão "Sincronizar" (envia pendentes).
+   - Botão "Baixar" (busca itens remotos).
+   - Exclusão seletiva: "Apenas localmente" ou "Em todos os lugares".
+   - Thumbnail do item via `imagem_uri` (local ou baixado).
+5. `src/db/queries.ts`: funções auxiliares `marcarItemSincronizado()`, `listarItensNaoSincronizados()`, `obterItemPorId()`. `atualizarAnalise()` agora reseta `sincronizado=0`.
 
 **Critério de pronto:** criar um item com o celular no modo avião, confirmar que fica marcado como não sincronizado, reativar a internet, e ver o registro aparecer no painel do Supabase (Table Editor) pouco depois.
 

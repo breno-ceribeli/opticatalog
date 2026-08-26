@@ -20,4 +20,4 @@ npx tsc --noEmit   # Typecheck
 ```
 
 ## Fase atual
-**Fase 5 — OCR (Text Detection)** (`roadmap-desenvolvimento.md:109`). Objetivo: botão "Ler texto" na revisão → chamada TEXT_DETECTION separada → preencher campo descrição com texto extraído.
+**Fase 6 — Sincronização com Supabase** (`roadmap-desenvolvimento.md:133`). Objetivo: sync automático ao reconectar, upload de imagens, download de itens remotos, exclusão seletiva.

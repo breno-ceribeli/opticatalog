@@ -31,6 +31,7 @@ export type ItemInventario = {
   tags_json: string | null;
   descricao: string | null;
   identificador_ocr: string | null;
+  imagem_uri: string | null;
   quantidade: number;
   criado_em: number;
   atualizado_em: number;
@@ -38,13 +39,14 @@ export type ItemInventario = {
 };
 
 export function criarAnalise(dados: {
+  id?: string;
   imagem_uri: string;
   objeto_detectado?: string;
   labels_json?: string;
   texto_ocr?: string;
   status?: "pendente" | "processado" | "erro";
 }): string {
-  const id = generateUUID();
+  const id = dados.id ?? generateUUID();
   const agora = Date.now();
 
   db.runSync(
@@ -100,6 +102,7 @@ export function atualizarAnalise(
 
   if (campos.length === 0) return;
 
+  campos.push("sincronizado = 0");
   valores.push(id);
   db.runSync(`UPDATE analises SET ${campos.join(", ")} WHERE id = ?`, valores);
 }
@@ -132,20 +135,22 @@ export async function excluirAnalise(id: string): Promise<boolean> {
 }
 
 export function criarItemInventario(dados: {
+  id?: string;
   analise_origem_id: string;
   nome: string;
   categoria: string;
   tags_json?: string;
   descricao?: string;
   identificador_ocr?: string;
+  imagem_uri?: string;
   quantidade?: number;
 }): string {
-  const id = generateUUID();
+  const id = dados.id ?? generateUUID();
   const agora = Date.now();
 
   db.runSync(
-    `INSERT INTO itens_inventario (id, analise_origem_id, nome, categoria, tags_json, descricao, identificador_ocr, quantidade, criado_em, atualizado_em, sincronizado)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+    `INSERT INTO itens_inventario (id, analise_origem_id, nome, categoria, tags_json, descricao, identificador_ocr, imagem_uri, quantidade, criado_em, atualizado_em, sincronizado)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
     [
       id,
       dados.analise_origem_id,
@@ -154,6 +159,7 @@ export function criarItemInventario(dados: {
       dados.tags_json ?? null,
       dados.descricao ?? null,
       dados.identificador_ocr ?? null,
+      dados.imagem_uri ?? null,
       dados.quantidade ?? 1,
       agora,
       agora,
@@ -169,6 +175,23 @@ export function listarItensInventario(): ItemInventario[] {
   );
 }
 
+export function listarItensNaoSincronizados(): ItemInventario[] {
+  return db.getAllSync<ItemInventario>(
+    `SELECT * FROM itens_inventario WHERE sincronizado = 0 ORDER BY criado_em DESC`
+  );
+}
+
+export function marcarItemSincronizado(id: string): void {
+  db.runSync(`UPDATE itens_inventario SET sincronizado = 1 WHERE id = ?`, [id]);
+}
+
+export function obterItemPorId(id: string): ItemInventario | null {
+  return db.getFirstSync<ItemInventario>(
+    `SELECT * FROM itens_inventario WHERE id = ?`,
+    [id]
+  ) ?? null;
+}
+
 export function obterItemPorAnalise(analiseId: string): ItemInventario | null {
   return db.getFirstSync<ItemInventario>(
     `SELECT * FROM itens_inventario WHERE analise_origem_id = ?`,
@@ -178,7 +201,7 @@ export function obterItemPorAnalise(analiseId: string): ItemInventario | null {
 
 export function atualizarItemInventario(
   id: string,
-  dados: Partial<Pick<ItemInventario, "nome" | "categoria" | "tags_json" | "descricao" | "identificador_ocr" | "quantidade">>
+  dados: Partial<Pick<ItemInventario, "nome" | "categoria" | "tags_json" | "descricao" | "identificador_ocr" | "imagem_uri" | "quantidade">>
 ): void {
   const campos: string[] = [];
   const valores: (string | null)[] = [];
@@ -202,6 +225,10 @@ export function atualizarItemInventario(
   if (dados.identificador_ocr !== undefined) {
     campos.push("identificador_ocr = ?");
     valores.push(dados.identificador_ocr);
+  }
+  if (dados.imagem_uri !== undefined) {
+    campos.push("imagem_uri = ?");
+    valores.push(dados.imagem_uri);
   }
   if (dados.quantidade !== undefined) {
     campos.push("quantidade = ?");

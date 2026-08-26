@@ -5,6 +5,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { criarAnalise, atualizarAnalise } from "../src/db/queries";
 import NetInfo from "@react-native-community/netinfo";
 import { analisarImagem } from "../src/services/visionApi";
+import { syncAnalisePeloId } from "../src/services/sync";
 
 export default function PreviewScreen() {
   const { uri } = useLocalSearchParams<{ uri: string }>();
@@ -45,6 +46,7 @@ export default function PreviewScreen() {
             labels_json: JSON.stringify(result.labels),
             status: "processado",
           });
+          syncAnalisePeloId(id);
         } catch {
           atualizarAnalise(id, { status: "erro" });
         } finally {

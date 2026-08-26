@@ -39,4 +39,9 @@ export function iniciarBanco() {
     CREATE INDEX IF NOT EXISTS idx_itens_sincronizado ON itens_inventario (sincronizado);
     CREATE INDEX IF NOT EXISTS idx_itens_identificador_ocr ON itens_inventario (identificador_ocr);
   `);
+
+  // Migration: adicionar imagem_uri em itens_inventario (local only, não sincroniza com Supabase)
+  try {
+    db.execSync(`ALTER TABLE itens_inventario ADD COLUMN imagem_uri TEXT`);
+  } catch {}
 }

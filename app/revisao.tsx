@@ -12,6 +12,7 @@ import {
 } from "../src/db/queries";
 import { analisarImagem, lerTextoOcr } from "../src/services/visionApi";
 import NetInfo from "@react-native-community/netinfo";
+import { syncAnalisePeloId, syncItemPeloId } from "../src/services/sync";
 
 export default function RevisaoScreen() {
   const { uri, analysisId } = useLocalSearchParams<{ uri: string; analysisId: string }>();
@@ -65,6 +66,7 @@ export default function RevisaoScreen() {
         labels_json: JSON.stringify(result.labels),
         status: "processado",
       });
+      syncAnalisePeloId(analysisId);
       setNome(result.objetoPrincipal);
       setTags(result.labels.map((l) => l.name).join(", "));
       setAnalise({ ...analise!, objeto_detectado: result.objetoPrincipal, labels_json: JSON.stringify(result.labels), status: "processado" });
@@ -91,6 +93,7 @@ export default function RevisaoScreen() {
       if (texto) {
         setDescricao(texto);
         atualizarAnalise(analysisId, { texto_ocr: texto });
+        syncAnalisePeloId(analysisId);
         Alert.alert("Texto extraído", "O texto foi preenchido no campo Descrição. Você pode editá-lo antes de salvar.");
       } else {
         Alert.alert("Nenhum texto encontrado", "A IA não detectou nenhum texto na imagem.");
@@ -118,12 +121,15 @@ export default function RevisaoScreen() {
 
       if (itemExistente) {
         atualizarItemInventario(itemExistente.id, dadosItem);
+        syncItemPeloId(itemExistente.id);
         Alert.alert("Item atualizado", "Os dados do item foram atualizados no inventário.");
       } else {
-        criarItemInventario({
+        const novoId = criarItemInventario({
           analise_origem_id: analysisId,
+          imagem_uri: uri,
           ...dadosItem,
         });
+        syncItemPeloId(novoId);
         Alert.alert("Item salvo", "Item adicionado ao inventário com sucesso.");
       }
 

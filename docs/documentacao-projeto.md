@@ -95,6 +95,7 @@ Tirar foto
 - `tags_json` (TEXT — JSON serializado, copiado de `labels_json`; usuário pode adicionar/remover tags)
 - `descricao` (texto editável pelo usuário; copiado de `texto_ocr` como valor inicial, mas o usuário pode reescrever livremente)
 - `identificador_ocr` (nullable — cópia **fixa, não editável** do texto bruto do OCR, usada só internamente para checagem de duplicado; diferente de `descricao`, que o usuário pode alterar)
+- `imagem_uri` (nullable — **campo local apenas**, caminho da imagem baixada do Supabase Storage; usado para thumbnail no card do item; não é sincronizado com o Supabase)
 - `quantidade`
 - `criado_em`
 - `atualizado_em`
@@ -102,13 +103,62 @@ Tirar foto
 
 ### Supabase (PostgreSQL, nuvem)
 
-Espelha as duas tabelas locais (mesmos campos, `sincronizado` como boolean de verdade, `labels`/`tags` como `jsonb` nativo do Postgres em vez de texto serializado), adicionando `user_id` para isolar dados por usuário (com RLS — Row Level Security — habilitado). O `id` não tem valor padrão gerado pelo banco — ele sempre chega já preenchido do app. **Diferença importante:** a coluna `imagem_uri` (caminho local) não existe do lado remoto — ela é substituída por `imagem_url`, preenchida só durante a sincronização, depois que a imagem é enviada ao Supabase Storage (ver seção 5.1).
+Espelha as duas tabelas locais com adaptções para PostgreSQL. O `id` sempre chega já preenchido do app (client-side). **Não existe `user_id`** — todas as tabelas têm acesso irrestrito (política de "acesso total") para simplificar o MVP de faculdade. RLS está habilitado mas com policy `USING (true) WITH CHECK (true)`.
+
+**SQL completo das tabelas Supabase:**
+
+```sql
+-- Tabela de análises (raw da Cloud Vision)
+create table analises (
+  id uuid primary key,
+  imagem_url text,                         -- preenchida na sincronização (Supabase Storage)
+  objeto_detectado text,                   -- da Object Localization
+  labels jsonb,                            -- da Label Detection: [{"label":"Cat","score":0.98},...]
+  texto_ocr text,                          -- preenchido só se OCR foi usado
+  status text default 'pendente',
+  criado_em timestamp default now()
+);
+
+-- Tabela de itens do inventário
+create table itens_inventario (
+  id uuid primary key,
+  analise_origem_id uuid references analises(id),
+  nome text not null,
+  categoria text,
+  tags jsonb,
+  descricao text,
+  identificador_ocr text,
+  quantidade integer default 1,
+  criado_em timestamp default now(),
+  atualizado_em timestamp default now()
+);
+
+-- RLS (acesso total — projeto de faculdade, sem isolamento por usuário)
+alter table analises enable row level security;
+alter table itens_inventario enable row level security;
+create policy "acesso total (projeto de faculdade)" on analises for all using (true) with check (true);
+create policy "acesso total (projeto de faculdade)" on itens_inventario for all using (true) with check (true);
+```
+
+**Diferenças em relação ao SQLite local (mapeamento na sincronização):**
+
+| Coluna local (SQLite) | Coluna remota (Supabase) | Tipo local → remoto | Observação |
+|---|---|---|---|
+| `imagem_uri` | `imagem_url` | TEXT → text | Local = caminho do arquivo; Remoto = URL do Storage |
+| `labels_json` | `labels` | TEXT (JSON serializado) → jsonb | Nome + tipo diferentes |
+| `tags_json` | `tags` | TEXT (JSON serializado) → jsonb | Nome + tipo diferentes |
+| `sincronizado` | *não existe* | INTEGER 0/1 → — | Campo auxiliar local, não vai para o Supabase |
+| `imagem_uri` (itens) | *não existe* | TEXT → — | Campo local apenas, para thumbnail; não sincroniza |
+| `criado_em` | `criado_em` | INTEGER (epoch ms) → timestamp | Conversão: `new Date(epoch).toISOString()` |
+| `atualizado_em` | `atualizado_em` | INTEGER (epoch ms) → timestamp | Idem |
+| `categoria` (NOT NULL) | `categoria` (nullable) | — | SQLite exige; Supabase permite nulo |
 
 ### 5.1 — Armazenamento das imagens
 
 - **Local:** a foto capturada é salva como arquivo permanente no celular via `expo-file-system` (não na pasta de cache), redimensionada/comprimida antes de salvar (ex: `expo-image-manipulator`, máx. ~1280px de largura). O caminho desse arquivo é o que fica em `analises.imagem_uri` no SQLite.
-- **Remoto:** um caminho de arquivo local não significa nada fora do próprio celular. Na sincronização, o arquivo é enviado a um bucket do **Supabase Storage**, e a URL pública/assinada resultante é salva em `analises.imagem_url` na tabela remota.
-- **`itens_inventario` não guarda imagem própria** — como ele referencia `analise_origem_id`, a miniatura do item é obtida buscando a imagem da análise de origem. Evita duplicar a mesma imagem em dois lugares.
+- **Remoto:** um caminho de arquivo local não significa nada fora do próprio celular. Na sincronização, o arquivo é enviado a um bucket do **Supabase Storage** (`fotos-inventario`), e a URL pública resultante é salva em `analises.imagem_url` na tabela remota.
+- **`itens_inventario.imagem_uri`** — campo local apenas, copiado da análise ao criar o item, ou preenchido ao baixar item remoto do Supabase. Não é sincronizado com o Supabase. Usado para exibir thumbnail no card do item.
+- **Download de itens remotos:** ao baixar um item do Supabase, o app busca a `imagem_url` da análise deorigem, baixa a imagem via `FileSystem.downloadAsync()` e salva localmente em `itens_inventario.imagem_uri`.
 
 ### Lógica de sincronização
 
@@ -144,7 +194,7 @@ Passo a passo de como o OCR se encaixa, do zero:
 | Critério | Como o projeto atende |
 |---|---|
 | Uso correto do Expo SQLite (2,0 pts) | Armazenamento local de `analises` e `itens_inventario`, fila offline, status de sincronização |
-| Integração com Supabase (2,0 pts) | Espelhamento das tabelas, upsert automático ao reconectar, RLS por usuário |
+| Integração com Supabase (2,0 pts) | Espelhamento das tabelas, upsert automático ao reconectar, RLS habilitado (sem isolamento por usuário nesta versão) |
 | Resolve problema real (2,0 pts) | Inventário sem código de barras, com diferenciação por OCR entre itens do mesmo tipo |
 | Visão computacional funcionando (4,0 pts) | Detecção de objeto + categorização + OCR complementar via Google Cloud Vision API |
 

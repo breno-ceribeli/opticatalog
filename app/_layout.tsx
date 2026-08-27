@@ -25,5 +25,13 @@ export default function RootLayout() {
     return unsubscribe;
   }, []);
 
-  return <Stack />;
+  return (
+    <Stack>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="camera" options={{ headerShown: false }} />
+      <Stack.Screen name="preview" options={{ headerShown: false }} />
+      <Stack.Screen name="revisao" options={{ title: "Revisar análise" }} />
+      <Stack.Screen name="historico" options={{ title: "Inventário" }} />
+    </Stack>
+  );
 }

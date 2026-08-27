@@ -25,6 +25,18 @@ export default function RevisaoScreen() {
   const [tags, setTags] = useState("");
   const [descricao, setDescricao] = useState("");
   const [itemExistente, setItemExistente] = useState<ItemInventario | null>(null);
+  const [imagemAspect, setImagemAspect] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!uri) return;
+    Image.getSize(
+      uri,
+      (w, h) => {
+        if (w > 0 && h > 0) setImagemAspect(w / h);
+      },
+      () => {}
+    );
+  }, [uri]);
 
   const carregarAnalise = useCallback(() => {
     if (!analysisId) return;
@@ -163,7 +175,13 @@ export default function RevisaoScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      {uri && <Image source={{ uri }} style={styles.image} />}
+      {uri && (
+        <Image
+          source={{ uri }}
+          style={[styles.image, imagemAspect ? { aspectRatio: imagemAspect } : null]}
+          resizeMode="contain"
+        />
+      )}
 
       <View style={styles.statusRow}>
         <View style={[styles.statusBadge, { backgroundColor: statusColors[analise.status] }]}>
@@ -258,7 +276,8 @@ const styles = StyleSheet.create({
   },
   image: {
     width: "100%",
-    height: 280,
+    aspectRatio: 1,
+    maxHeight: 400,
     borderRadius: 12,
     marginBottom: 20,
     backgroundColor: "#f0f0f0",

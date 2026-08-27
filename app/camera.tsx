@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, Alert } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, Alert, useWindowDimensions } from "react-native";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -10,6 +11,9 @@ export default function CameraScreen() {
   const [cameraType, setCameraType] = useState<CameraType>("back");
   const cameraRef = useRef<CameraView>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const isLandscape = width > height;
 
   useEffect(() => {
     setIsMounted(true);
@@ -100,17 +104,41 @@ export default function CameraScreen() {
         facing={cameraType}
         autofocus="on"
       />
-      <View style={styles.controls}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()} activeOpacity={0.7}>
-          <Text style={styles.iconText}>←</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.captureButton} onPress={takePicture} activeOpacity={0.7}>
-          <View style={styles.captureInner} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.iconButton} onPress={flipCamera} activeOpacity={0.7}>
-          <Text style={styles.iconText}>🔄</Text>
-        </TouchableOpacity>
-      </View>
+
+      <TouchableOpacity
+        style={[styles.backButton, { top: insets.top + 12, left: insets.left + 16 }]}
+        onPress={() => router.back()}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.backIcon}>←</Text>
+      </TouchableOpacity>
+
+      {isLandscape ? (
+        <View style={[styles.controlsLandscape, { right: insets.right + 20 }]}>
+          <TouchableOpacity style={styles.iconButton} onPress={flipCamera} activeOpacity={0.7}>
+            <Text style={styles.iconText}>🔄</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.captureButton} onPress={takePicture} activeOpacity={0.7}>
+            <View style={styles.captureInner} />
+          </TouchableOpacity>
+          <View style={styles.landscapeBalance} />
+        </View>
+      ) : (
+        <View style={[styles.controls, { paddingBottom: insets.bottom + 24 }]}>
+          <View style={styles.captureLayer}>
+            <TouchableOpacity style={styles.captureButton} onPress={takePicture} activeOpacity={0.7}>
+              <View style={styles.captureInner} />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={[styles.iconButton, styles.flipPortrait, { right: insets.right + 24 }]}
+            onPress={flipCamera}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.iconText}>🔄</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -126,14 +154,44 @@ const styles = StyleSheet.create({
     flex: 1,
     width: "100%",
   },
-  controls: {
-    flexDirection: "row",
-    justifyContent: "space-around",
+  backButton: {
+    position: "absolute",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 30,
-    width: "100%",
+  },
+  backIcon: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "600",
+  },
+  controls: {
     position: "absolute",
     bottom: 0,
+    left: 0,
+    right: 0,
+    paddingTop: 30,
+  },
+  captureLayer: {
+    alignItems: "center",
+  },
+  flipPortrait: {
+    position: "absolute",
+    top: 40,
+  },
+  controlsLandscape: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 24,
+  },
+  landscapeBalance: {
+    height: 60,
   },
   iconButton: {
     width: 60,
@@ -160,9 +218,6 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     backgroundColor: "#fff",
-  },
-  spacer: {
-    width: 60,
   },
   text: {
     color: "#fff",

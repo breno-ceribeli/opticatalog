@@ -87,7 +87,7 @@ export default function PreviewScreen() {
 
   return (
     <View style={styles.container}>
-      <Image source={{ uri }} style={styles.image} />
+      <Image source={{ uri }} style={styles.image} resizeMode="contain" />
       <View style={styles.buttonRow}>
         <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={handleTirarDeNovo} activeOpacity={0.7} disabled={saving || analyzing}>
           <Text style={styles.buttonTextSecondary}>Tirar de novo</Text>

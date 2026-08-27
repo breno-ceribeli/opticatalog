@@ -27,11 +27,11 @@ export default function RootLayout() {
 
   return (
     <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="camera" options={{ headerShown: false }} />
-      <Stack.Screen name="preview" options={{ headerShown: false }} />
-      <Stack.Screen name="revisao" options={{ title: "Revisar análise" }} />
-      <Stack.Screen name="historico" options={{ title: "Inventário" }} />
+      <Stack.Screen name="index" options={{ headerShown: false, orientation: "portrait" }} />
+      <Stack.Screen name="camera" options={{ headerShown: false, orientation: "all" }} />
+      <Stack.Screen name="preview" options={{ headerShown: false, orientation: "portrait" }} />
+      <Stack.Screen name="revisao" options={{ title: "Revisar análise", orientation: "portrait" }} />
+      <Stack.Screen name="historico" options={{ title: "Inventário", orientation: "portrait" }} />
     </Stack>
   );
 }

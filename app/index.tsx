@@ -23,7 +23,7 @@ export default function HomeScreen() {
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
     }
 
-    const filename = `foto_${Date.now()}.jpg`;
+    const filename = `foto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
     const destUri = `${dir}${filename}`;
 
     const manipulated = await ImageManipulator.manipulateAsync(

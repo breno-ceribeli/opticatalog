@@ -52,7 +52,7 @@ export default function CameraScreen() {
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
     }
 
-    const filename = `foto_${Date.now()}.jpg`;
+    const filename = `foto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
     const destUri = `${dir}${filename}`;
 
     const manipulated = await ImageManipulator.manipulateAsync(
@@ -84,6 +84,7 @@ export default function CameraScreen() {
         });
         if (photo) {
           await processAndNavigate(photo.uri);
+          FileSystem.deleteAsync(photo.uri, { idempotent: true }).catch(() => {});
         }
       } catch (error) {
         console.error("Erro ao processar foto:", error);

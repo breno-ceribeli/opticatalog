@@ -13,6 +13,7 @@ export default function PreviewScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const uriRef = useRef(uri);
   const photoUsedRef = useRef(false);
+  const analysisIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     uriRef.current = uri;
@@ -30,10 +31,18 @@ export default function PreviewScreen() {
 
   const handleUsarFoto = async () => {
     if (!uri) return;
+
+    // Guarda contra uso duplicado da mesma foto (nunca criar 2 análises para ela)
+    if (analysisIdRef.current) {
+      router.push({ pathname: "/revisao", params: { uri, analysisId: analysisIdRef.current } } as any);
+      return;
+    }
+
     setSaving(true);
     photoUsedRef.current = true;
     try {
       const id = criarAnalise({ imagem_uri: uri, status: "pendente" });
+      analysisIdRef.current = id;
 
       // Verificar conectividade e chamar API se online
       const netInfo = await NetInfo.fetch();
@@ -56,7 +65,16 @@ export default function PreviewScreen() {
         console.log("[Preview] Offline - analysis queued as pendente", { id });
       }
 
-      router.push({ pathname: "/revisao", params: { uri, analysisId: id } } as any);
+      // Firmar o stack: remove camera+preview e pousa a revisão sobre a Home.
+      // Voltar do Revisão cai na tela inicial, sem preview órfão no meio.
+      try {
+        router.dismissTo("/");
+        setTimeout(() => {
+          router.push({ pathname: "/revisao", params: { uri, analysisId: id } } as any);
+        }, 50);
+      } catch {
+        router.replace({ pathname: "/revisao", params: { uri, analysisId: id } } as any);
+      }
     } catch (error) {
       console.error("Erro ao salvar foto:", error);
       Alert.alert("Erro", "Não foi possível salvar a foto");

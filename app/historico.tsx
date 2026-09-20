@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert } from "react-native";
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert, ScrollView } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import NetInfo from "@react-native-community/netinfo";
 import {
@@ -43,6 +43,8 @@ export default function HistoricoScreen() {
   const [carregandoItensNuvem, setCarregandoItensNuvem] = useState(false);
   const [erroItensNuvem, setErroItensNuvem] = useState<string | null>(null);
   const [baixandoItemId, setBaixandoItemId] = useState<string | null>(null);
+  const [categoriasFiltro, setCategoriasFiltro] = useState<string[]>([]);
+  const [tagsFiltro, setTagsFiltro] = useState<string[]>([]);
 
   const carregarDados = useCallback(() => {
     setLoading(true);
@@ -333,6 +335,53 @@ export default function HistoricoScreen() {
             ...itensNuvemSemLocal.map<LinhaItem>((item) => ({ tipo: "nuvem", item })),
           ];
 
+  const categoriaDeLinha = (linha: LinhaItem): string =>
+    linha.tipo === "local" ? linha.item.categoria : (linha.item.categoria ?? "");
+
+  const tagsDeLinha = (linha: LinhaItem): string[] =>
+    linha.tipo === "local"
+      ? linha.item.tags_json
+        ? (JSON.parse(linha.item.tags_json) as unknown[]).map((t) => String(t)).filter(Boolean)
+        : []
+      : Array.isArray(linha.item.tags)
+        ? linha.item.tags.map((t) => String(t ?? "")).filter(Boolean)
+        : [];
+
+  const opcoesCategorias: string[] = [...new Set(linhasItens.map(categoriaDeLinha).filter(Boolean))].sort();
+  const opcoesTags: string[] = [...new Set(linhasItens.flatMap(tagsDeLinha))].sort();
+
+  const filtroAtivo = categoriasFiltro.length > 0 || tagsFiltro.length > 0;
+
+  const linhasFiltradas = linhasItens.filter((linha) => {
+    if (categoriasFiltro.length > 0 && !categoriasFiltro.includes(categoriaDeLinha(linha))) {
+      return false;
+    }
+    if (tagsFiltro.length > 0) {
+      const tagsItem = tagsDeLinha(linha);
+      if (!tagsFiltro.every((t) => tagsItem.includes(t))) return false;
+    }
+    return true;
+  });
+
+  const toggleCategoria = (categoria: string) => {
+    setCategoriasFiltro((prev) =>
+      prev.includes(categoria)
+        ? prev.filter((c) => c !== categoria)
+        : [...prev, categoria]
+    );
+  };
+
+  const toggleTag = (tag: string) => {
+    setTagsFiltro((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const limparFiltros = () => {
+    setCategoriasFiltro([]);
+    setTagsFiltro([]);
+  };
+
   const renderAnalise = ({ item }: { item: Analise }) => (
     <TouchableOpacity
       style={styles.card}
@@ -614,6 +663,52 @@ export default function HistoricoScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          {opcoesCategorias.length > 0 && (
+            <View style={styles.filtroSection}>
+              <Text style={styles.filtroLabel}>Categoria</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtroChips}>
+                {opcoesCategorias.map((categoria) => (
+                  <TouchableOpacity
+                    key={categoria}
+                    style={[styles.filtroChip, categoriasFiltro.includes(categoria) && styles.filtroChipActive]}
+                    onPress={() => toggleCategoria(categoria)}
+                  >
+                    <Text style={[styles.filtroChipText, categoriasFiltro.includes(categoria) && styles.filtroChipTextActive]}>
+                      {categoria}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+          {opcoesTags.length > 0 && (
+            <View style={styles.filtroSection}>
+              <Text style={styles.filtroLabel}>Tags</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtroChips}>
+                {opcoesTags.map((tag) => (
+                  <TouchableOpacity
+                    key={tag}
+                    style={[styles.filtroChip, tagsFiltro.includes(tag) && styles.filtroChipActive]}
+                    onPress={() => toggleTag(tag)}
+                  >
+                    <Text style={[styles.filtroChipText, tagsFiltro.includes(tag) && styles.filtroChipTextActive]}>
+                      {tag}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+          {filtroAtivo && (
+            <View style={styles.filtroBar}>
+              <Text style={styles.filtroCount}>
+                {linhasFiltradas.length} de {linhasItens.length} itens
+              </Text>
+              <TouchableOpacity onPress={limparFiltros}>
+                <Text style={styles.filtroClear}>Limpar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           <View style={styles.syncBar}>
             <TouchableOpacity
               style={[styles.syncButton, (!isConnected || syncing) && styles.syncButtonDisabled]}
@@ -675,30 +770,41 @@ export default function HistoricoScreen() {
           />
         )
       ) : (
-        linhasItens.length === 0 ? (
+        linhasFiltradas.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              {filtroItens === "nuvem"
-                ? "Nenhum item na nuvem"
-                : filtroItens === "locais"
-                  ? "Nenhum item local"
-                  : "Nenhum item salvo"}
-            </Text>
-            <Text style={styles.emptySubtext}>
-              {filtroItens === "nuvem" && erroItensNuvem
-                ? erroItensNuvem
-                : filtroItens === "nuvem"
-                  ? carregandoItensNuvem
-                    ? "Carregando..."
-                    : "Nenhum item na nuvem"
-                  : filtroItens === "locais"
-                    ? "Salve um item a partir de uma analise"
-                    : "Tire uma foto ou baixe itens da nuvem"}
-            </Text>
+            {filtroAtivo ? (
+              <>
+                <Text style={styles.emptyText}>Nenhum item corresponde ao filtro</Text>
+                <TouchableOpacity style={styles.clearFiltersButton} onPress={limparFiltros}>
+                  <Text style={styles.clearFiltersButtonText}>Limpar filtros</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.emptyText}>
+                  {filtroItens === "nuvem"
+                    ? "Nenhum item na nuvem"
+                    : filtroItens === "locais"
+                      ? "Nenhum item local"
+                      : "Nenhum item salvo"}
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  {filtroItens === "nuvem" && erroItensNuvem
+                    ? erroItensNuvem
+                    : filtroItens === "nuvem"
+                      ? carregandoItensNuvem
+                        ? "Carregando..."
+                        : "Nenhum item na nuvem"
+                      : filtroItens === "locais"
+                        ? "Salve um item a partir de uma analise"
+                        : "Tire uma foto ou baixe itens da nuvem"}
+                </Text>
+              </>
+            )}
           </View>
         ) : (
           <FlatList
-            data={linhasItens}
+            data={linhasFiltradas}
             keyExtractor={(linha) => `${linha.tipo}-${linha.item.id}`}
             renderItem={renderLinhaItem}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -782,6 +888,66 @@ const styles = StyleSheet.create({
   },
   filterPillTextActive: {
     color: "#fff",
+  },
+  filtroSection: {
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  filtroLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#666",
+    marginBottom: 6,
+    textTransform: "uppercase",
+  },
+  filtroChips: {
+    paddingRight: 4,
+  },
+  filtroChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: "#e0e0e0",
+    marginRight: 8,
+  },
+  filtroChipActive: {
+    backgroundColor: "#2196f3",
+  },
+  filtroChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#444",
+  },
+  filtroChipTextActive: {
+    color: "#fff",
+  },
+  filtroBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  filtroCount: {
+    fontSize: 12,
+    color: "#666",
+  },
+  filtroClear: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#f44336",
+  },
+  clearFiltersButton: {
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: "#f44336",
+  },
+  clearFiltersButtonText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
   },
   syncButton: {
     paddingHorizontal: 12,

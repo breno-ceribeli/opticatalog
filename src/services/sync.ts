@@ -11,8 +11,10 @@ import {
   marcarItemSincronizado,
   obterAnalise,
   obterItemPorId,
-  criarAnalise,
   criarItemInventario,
+  listarItensPorAnalise,
+  excluirItemInventario,
+  excluirAnalise,
 } from "../db/queries";
 
 const BUCKET = "fotos-inventario";
@@ -116,7 +118,7 @@ export async function sincronizarAnalise(
     try {
       imagemUrl = await uploadImagemLocal(analise.imagem_uri, analise.id);
     } catch (e: any) {
-      console.warn("[Sync] Upload imagem falhou, sincronizando sem ella:", e.message);
+      console.warn("[Sync] Upload imagem falhou, sincronizando sem ela:", e.message);
     }
 
     const dadosRemoto = paraAnaliseSupabase(analise);
@@ -226,95 +228,225 @@ export async function sincronizarTudo(): Promise<{
   return { analisesSync, itensSync, erros };
 }
 
-// ─── Download de itens remotos ──────────────────────────────────────
+// ─── Itens remotos (lista + download) ───────────────────────────────
+
+export type ItemRemota = {
+  id: string;
+  analise_origem_id: string | null;
+  nome: string;
+  categoria: string | null;
+  tags: unknown[] | null;
+  descricao: string | null;
+  identificador_ocr: string | null;
+  quantidade: number | null;
+  criado_em: string;
+  atualizado_em: string;
+  imagem_url: string | null;
+};
+
+export async function listarItensRemotos(): Promise<{
+  itens: ItemRemota[];
+  erros: string[];
+}> {
+  const netInfo = await NetInfo.fetch();
+  if (!netInfo.isConnected || !netInfo.isInternetReachable) {
+    return { itens: [], erros: ["Sem internet"] };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("itens_inventario")
+      .select("*")
+      .order("atualizado_em", { ascending: false });
+
+    if (error) return { itens: [], erros: [error.message] };
+
+    const itens = await Promise.all(
+      (data ?? []).map(async (item): Promise<ItemRemota> => {
+        let imagem_url: string | null = null;
+        if (item.analise_origem_id) {
+          const { data: analise } = await supabase
+            .from("analises")
+            .select("imagem_url")
+            .eq("id", item.analise_origem_id)
+            .single();
+          imagem_url = analise?.imagem_url ?? null;
+        }
+        return { ...item, imagem_url } as ItemRemota;
+      })
+    );
+
+    return { itens, erros: [] };
+  } catch (error: any) {
+    return { itens: [], erros: [error.message] };
+  }
+}
+
+export async function baixarItemRemoto(
+  item: ItemRemota
+): Promise<{ ok: boolean; erro?: string }> {
+  try {
+    if (obterItemPorId(item.id)) return { ok: true };
+
+    let imagemUriLocal: string | null = null;
+    if (item.imagem_url) {
+      imagemUriLocal = await downloadImagemRemota(item.imagem_url, item.id);
+    }
+
+    criarItemInventario({
+      id: item.id,
+      analise_origem_id: item.analise_origem_id ?? "",
+      nome: item.nome,
+      categoria: item.categoria ?? "",
+      tags_json: item.tags ? JSON.stringify(item.tags) : undefined,
+      descricao: item.descricao ?? undefined,
+      identificador_ocr: item.identificador_ocr ?? undefined,
+      imagem_uri: imagemUriLocal ?? undefined,
+      quantidade: item.quantidade ?? 1,
+    });
+
+    marcarItemSincronizado(item.id);
+    return { ok: true };
+  } catch (error: any) {
+    return { ok: false, erro: error.message };
+  }
+}
 
 export async function baixarItensRemotos(): Promise<{
   baixados: number;
   erros: string[];
 }> {
-  const netInfo = await NetInfo.fetch();
-  if (!netInfo.isConnected || !netInfo.isInternetReachable) {
-    return { baixados: 0, erros: ["Sem internet"] };
-  }
+  const { itens, erros } = await listarItensRemotos();
+  if (erros.length > 0) return { baixados: 0, erros };
 
-  const erros: string[] = [];
   let baixados = 0;
-
-  try {
-    const { data: itensRemotos, error: fetchError } = await supabase
-      .from("itens_inventario")
-      .select("*");
-
-    if (fetchError) throw fetchError;
-    if (!itensRemotos || itensRemotos.length === 0) return { baixados: 0, erros: [] };
-
-    for (const itemRemoto of itensRemotos) {
-      const existente = obterItemPorId(itemRemoto.id);
-      if (existente) continue;
-
-      try {
-        let imagemUriLocal: string | null = null;
-
-        if (itemRemoto.analise_origem_id) {
-          const { data: analiseRemota } = await supabase
-            .from("analises")
-            .select("id, imagem_url")
-            .eq("id", itemRemoto.analise_origem_id)
-            .single();
-
-          if (analiseRemota?.imagem_url) {
-            imagemUriLocal = await downloadImagemRemota(
-              analiseRemota.imagem_url,
-              itemRemoto.id
-            );
-          }
-
-          if (analiseRemota) {
-            const existenteAnalise = obterAnalise(analiseRemota.id);
-            if (!existenteAnalise) {
-              criarAnalise({
-                id: analiseRemota.id,
-                imagem_uri: imagemUriLocal ?? "",
-                status: "processado",
-              });
-            }
-          }
-        }
-
-        criarItemInventario({
-          id: itemRemoto.id,
-          analise_origem_id: itemRemoto.analise_origem_id ?? "",
-          nome: itemRemoto.nome,
-          categoria: itemRemoto.categoria ?? "",
-          tags_json: itemRemoto.tags ? JSON.stringify(itemRemoto.tags) : undefined,
-          descricao: itemRemoto.descricao ?? undefined,
-          identificador_ocr: itemRemoto.identificador_ocr ?? undefined,
-          imagem_uri: imagemUriLocal ?? undefined,
-          quantidade: itemRemoto.quantidade ?? 1,
-        });
-
-        baixados++;
-      } catch (e: any) {
-        erros.push(`Item ${itemRemoto.id?.slice(0, 8)}: ${e.message}`);
-      }
-    }
-  } catch (error: any) {
-    erros.push(`Erro ao buscar itens remotos: ${error.message}`);
+  for (const item of itens) {
+    if (obterItemPorId(item.id)) continue;
+    const result = await baixarItemRemoto(item);
+    if (result.ok) baixados++;
+    else if (result.erro) erros.push(`Item ${item.id.slice(0, 8)}: ${result.erro}`);
   }
 
   return { baixados, erros };
 }
 
-// ─── Exclusão remota ────────────────────────────────────────────────
+// ─── Downloads de análises (somente leitura, sem gravar local) ───────
 
-export async function excluirRemoto(id: string): Promise<boolean> {
+export type AnaliseRemota = {
+  id: string;
+  imagem_url: string | null;
+  objeto_detectado: string | null;
+  labels: unknown[] | null;
+  texto_ocr: string | null;
+  status: string;
+  criado_em: string;
+};
+
+export async function listarAnalisesRemotas(): Promise<{
+  analises: AnaliseRemota[];
+  erros: string[];
+}> {
+  const netInfo = await NetInfo.fetch();
+  if (!netInfo.isConnected || !netInfo.isInternetReachable) {
+    return { analises: [], erros: ["Sem internet"] };
+  }
+
   try {
-    await supabase.from("itens_inventario").delete().eq("id", id);
-    await supabase.from("analises").delete().eq("id", id);
-    await deletarImagemRemota(id);
+    const { data, error } = await supabase
+      .from("analises")
+      .select("*")
+      .order("criado_em", { ascending: false });
+
+    if (error) return { analises: [], erros: [error.message] };
+
+    return { analises: (data ?? []) as AnaliseRemota[], erros: [] };
+  } catch (error: any) {
+    return { analises: [], erros: [error.message] };
+  }
+}
+
+export async function obterAnaliseRemota(
+  id: string
+): Promise<AnaliseRemota | null> {
+  const netInfo = await NetInfo.fetch();
+  if (!netInfo.isConnected || !netInfo.isInternetReachable) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from("analises")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error || !data) return null;
+    return data as AnaliseRemota;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Exclusão remota ──────────────────────────────────────────────────
+
+export async function excluirItemEmTodoLugar(itemId: string): Promise<boolean> {
+  try {
+    const item = obterItemPorId(itemId);
+    const origemId = item?.analise_origem_id;
+
+    await supabase.from("itens_inventario").delete().eq("id", itemId);
+    if (origemId) {
+      await supabase.from("analises").delete().eq("id", origemId);
+      await deletarImagemRemota(origemId);
+    }
+
+    await excluirItemInventario(itemId);
+    if (origemId) {
+      const analiseLocal = obterAnalise(origemId);
+      if (analiseLocal) await excluirAnalise(origemId);
+    }
     return true;
   } catch (error: any) {
-    console.error("[Sync] Erro excluir remoto:", error);
+    console.error("[Sync] Erro excluir item em todo lugar:", error.message);
+    return false;
+  }
+}
+
+export async function excluirItemNuvem(itemId: string): Promise<boolean> {
+  try {
+    const { data: itemRemoto } = await supabase
+      .from("itens_inventario")
+      .select("analise_origem_id")
+      .eq("id", itemId)
+      .single();
+
+    await supabase.from("itens_inventario").delete().eq("id", itemId);
+    if (itemRemoto?.analise_origem_id) {
+      await supabase.from("analises").delete().eq("id", itemRemoto.analise_origem_id);
+      await deletarImagemRemota(itemRemoto.analise_origem_id);
+    }
+    return true;
+  } catch (error: any) {
+    console.error("[Sync] Erro excluir item na nuvem:", error.message);
+    return false;
+  }
+}
+
+export async function excluirAnaliseEmTodoLugar(id: string): Promise<boolean> {
+  try {
+    const itens = listarItensPorAnalise(id);
+
+    for (const item of itens) {
+      await supabase.from("itens_inventario").delete().eq("id", item.id);
+    }
+    await supabase.from("analises").delete().eq("id", id);
+    await deletarImagemRemota(id);
+
+    for (const item of itens) {
+      await excluirItemInventario(item.id);
+    }
+    await excluirAnalise(id);
+    return true;
+  } catch (error: any) {
+    console.error("[Sync] Erro excluir análise em todo lugar:", error.message);
     return false;
   }
 }

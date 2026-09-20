@@ -68,10 +68,7 @@ export default function HomeScreen() {
   };
 
   const handleItemPress = (item: ItemInventario) => {
-    router.push({
-      pathname: "/revisao",
-      params: { uri: item.imagem_uri ?? "", analysisId: item.analise_origem_id },
-    } as any);
+    router.push({ pathname: "/item/[id]", params: { id: item.id } } as any);
   };
 
   return (

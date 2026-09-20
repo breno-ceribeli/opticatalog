@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Alert } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
 import {
   obterAnalise,
   atualizarAnalise,
@@ -12,11 +12,12 @@ import {
 } from "../src/db/queries";
 import { analisarImagem, lerTextoOcr } from "../src/services/visionApi";
 import NetInfo from "@react-native-community/netinfo";
-import { syncAnalisePeloId, syncItemPeloId } from "../src/services/sync";
+import { syncAnalisePeloId, syncItemPeloId, AnaliseRemota } from "../src/services/sync";
 
 export default function RevisaoScreen() {
-  const { uri, analysisId } = useLocalSearchParams<{ uri: string; analysisId: string }>();
+  const { uri, analysisId, remota } = useLocalSearchParams<{ uri: string; analysisId: string; remota?: string }>();
   const [analise, setAnalise] = useState<Analise | null>(null);
+  const [analiseRemota, setAnaliseRemota] = useState<AnaliseRemota | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [readingText, setReadingText] = useState(false);
@@ -27,19 +28,41 @@ export default function RevisaoScreen() {
   const [itemExistente, setItemExistente] = useState<ItemInventario | null>(null);
   const [imagemAspect, setImagemAspect] = useState<number | null>(null);
 
+  const imagemUri = uri || analiseRemota?.imagem_url || null;
+
+  const modo: "criar" | "item" | "remota" = analiseRemota
+    ? "remota"
+    : itemExistente
+      ? "item"
+      : "criar";
+
   useEffect(() => {
-    if (!uri) return;
+    if (!imagemUri) return;
     Image.getSize(
-      uri,
+      imagemUri,
       (w, h) => {
         if (w > 0 && h > 0) setImagemAspect(w / h);
       },
       () => {}
     );
-  }, [uri]);
+  }, [imagemUri]);
 
   const carregarAnalise = useCallback(() => {
-    if (!analysisId) return;
+    if (remota) {
+      try {
+        const dados = JSON.parse(remota) as AnaliseRemota;
+        setAnaliseRemota(dados);
+        setItemExistente(obterItemPorAnalise(dados.id));
+      } catch {}
+      setLoading(false);
+      return;
+    }
+
+    if (!analysisId) {
+      setLoading(false);
+      return;
+    }
+
     const dados = obterAnalise(analysisId);
     setAnalise(dados);
 
@@ -57,7 +80,7 @@ export default function RevisaoScreen() {
       setDescricao(dados.texto_ocr ?? "");
     }
     setLoading(false);
-  }, [analysisId]);
+  }, [analysisId, remota]);
 
   useEffect(() => {
     carregarAnalise();
@@ -152,7 +175,7 @@ export default function RevisaoScreen() {
     }
   };
 
-  if (loading || !analise) {
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#333" />
@@ -161,38 +184,108 @@ export default function RevisaoScreen() {
     );
   }
 
-  const statusColors = {
+  if (!analise && !analiseRemota) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Análise não encontrada.</Text>
+      </View>
+    );
+  }
+
+  const statusColors: Record<string, string> = {
     pendente: "#ffa500",
     processado: "#4caf50",
     erro: "#f44336",
   };
 
-  const statusLabels = {
+  const statusLabels: Record<string, string> = {
     pendente: "Pendente",
     processado: "Processado",
     erro: "Erro",
   };
 
+  const statusKey = analiseRemota?.status ?? analise?.status ?? "pendente";
+  const statusColor = statusColors[statusKey] ?? "#999";
+  const statusLabel = statusLabels[statusKey] ?? statusKey;
+
+  const formatarData = (ts: number) => {
+    try {
+      return new Date(ts).toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "";
+    }
+  };
+
+  const renderResumo = () => {
+    const objeto = analiseRemota?.objeto_detectado ?? analise?.objeto_detectado ?? null;
+    const labels: string[] = analiseRemota
+      ? (Array.isArray(analiseRemota.labels) ? analiseRemota.labels.map((l: any) => l.name ?? "").filter(Boolean) : [])
+      : (analise?.labels_json ? JSON.parse(analise.labels_json).map((l: any) => l.name) : []);
+    const textoOcr = analiseRemota?.texto_ocr ?? analise?.texto_ocr ?? null;
+    const data = analiseRemota
+      ? formatarData(new Date(analiseRemota.criado_em).getTime())
+      : formatarData(analise?.criado_em ?? 0);
+
+    return (
+      <>
+        <View style={styles.section}>
+          <Text style={styles.label}>Nome do objeto</Text>
+          <Text style={styles.value}>{objeto ?? "—"}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Tags detectadas</Text>
+          {labels.length > 0 ? (
+            <Text style={styles.value}>{labels.join(", ")}</Text>
+          ) : (
+            <Text style={styles.valueMuted}>Nenhuma tag detectada</Text>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Texto OCR</Text>
+          {textoOcr ? (
+            <Text style={styles.value}>{textoOcr}</Text>
+          ) : (
+            <Text style={styles.valueMuted}>Nenhum texto lido</Text>
+          )}
+        </View>
+
+        <Text style={styles.itemSavedHint}>Analisada em {data}</Text>
+      </>
+    );
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      {uri && (
+      {imagemUri ? (
         <Image
-          source={{ uri }}
+          source={{ uri: imagemUri }}
           style={[styles.image, imagemAspect ? { aspectRatio: imagemAspect } : null]}
           resizeMode="contain"
         />
+      ) : (
+        <View style={styles.imagePlaceholder}>
+          <Text style={styles.imagePlaceholderText}>?</Text>
+        </View>
       )}
 
       <View style={styles.statusRow}>
-        <View style={[styles.statusBadge, { backgroundColor: statusColors[analise.status] }]}>
-          <Text style={styles.statusText}>{statusLabels[analise.status]}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+          <Text style={styles.statusText}>{statusLabel}</Text>
         </View>
-        {(analise.status === "erro" || analise.status === "pendente") && (
+        {!analiseRemota && analise && (analise.status === "erro" || analise.status === "pendente") && (
           <TouchableOpacity style={styles.retryButton} onPress={handleReanalisar} disabled={analyzing}>
             <Text style={styles.retryButtonText}>{analyzing ? "Analisando..." : "Analisar agora"}</Text>
           </TouchableOpacity>
         )}
-        {analise.texto_ocr ? (
+        {!analiseRemota && analise && (analise.texto_ocr ? (
           <View style={[styles.ocrButton, styles.ocrButtonDone]}>
             <Text style={styles.ocrButtonText}>Texto já lido</Text>
           </View>
@@ -200,56 +293,78 @@ export default function RevisaoScreen() {
           <TouchableOpacity style={styles.ocrButton} onPress={handleLerTexto} disabled={readingText}>
             <Text style={styles.ocrButtonText}>{readingText ? "Lendo..." : "Ler texto"}</Text>
           </TouchableOpacity>
+        ))}
+        {analiseRemota && (
+          <View style={[styles.statusBadge, { backgroundColor: "#9c27b0" }]}>
+            <Text style={styles.statusText}>Nuvem</Text>
+          </View>
         )}
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Nome do objeto</Text>
-        <TextInput
-          style={styles.input}
-          value={nome}
-          onChangeText={setNome}
-          placeholder="Ex: Cadeira, Furadeira, Notebook"
-        />
-      </View>
+      {modo === "criar" ? (
+        <>
+          <View style={styles.section}>
+            <Text style={styles.label}>Nome do objeto</Text>
+            <TextInput
+              style={styles.input}
+              value={nome}
+              onChangeText={setNome}
+              placeholder="Ex: Cadeira, Furadeira, Notebook"
+            />
+          </View>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Categoria <Text style={styles.required}>*</Text></Text>
-        <TextInput
-          style={styles.input}
-          value={categoria}
-          onChangeText={setCategoria}
-          placeholder="Ex: Móveis, Ferramentas, Eletrônicos"
-        />
-      </View>
+          <View style={styles.section}>
+            <Text style={styles.label}>Categoria <Text style={styles.required}>*</Text></Text>
+            <TextInput
+              style={styles.input}
+              value={categoria}
+              onChangeText={setCategoria}
+              placeholder="Ex: Móveis, Ferramentas, Eletrônicos"
+            />
+          </View>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Tags (sugeridas pela IA, editáveis)</Text>
-        <TextInput
-          style={styles.input}
-          value={tags}
-          onChangeText={setTags}
-          placeholder="Ex: furniture, wood, chair"
-        />
-      </View>
+          <View style={styles.section}>
+            <Text style={styles.label}>Tags (sugeridas pela IA, editáveis)</Text>
+            <TextInput
+              style={styles.input}
+              value={tags}
+              onChangeText={setTags}
+              placeholder="Ex: furniture, wood, chair"
+            />
+          </View>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Descrição (opcional)</Text>
-        <TextInput
-          style={[styles.input, styles.inputMultiline]}
-          value={descricao}
-          onChangeText={setDescricao}
-          placeholder="Detalhes, número de série, observações..."
-          multiline
-          numberOfLines={3}
-        />
-      </View>
+          <View style={styles.section}>
+            <Text style={styles.label}>Descrição (opcional)</Text>
+            <TextInput
+              style={[styles.input, styles.inputMultiline]}
+              value={descricao}
+              onChangeText={setDescricao}
+              placeholder="Detalhes, número de série, observações..."
+              multiline
+              numberOfLines={3}
+            />
+          </View>
 
-      <TouchableOpacity style={[styles.saveButton, itemExistente && styles.saveButtonUpdate]} onPress={handleSalvar} activeOpacity={0.7}>
-        <Text style={styles.saveButtonText}>{itemExistente ? "Atualizar item" : "Salvar no inventário"}</Text>
-      </TouchableOpacity>
-      {itemExistente && (
-        <Text style={styles.itemSavedHint}>Este item já foi salvo no inventário.</Text>
+          <TouchableOpacity style={styles.saveButton} onPress={handleSalvar} activeOpacity={0.7}>
+            <Text style={styles.saveButtonText}>Salvar no inventário</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          {renderResumo()}
+
+          {itemExistente ? (
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={() => router.push({ pathname: "/item/[id]", params: { id: itemExistente.id } } as any)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.saveButtonText}>Ver item</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.itemSavedHint}>Análise da nuvem (somente leitura).</Text>
+          )}
+        </>
       )}
     </ScrollView>
   );
@@ -281,6 +396,21 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 20,
     backgroundColor: "#f0f0f0",
+  },
+  imagePlaceholder: {
+    width: "100%",
+    aspectRatio: 1,
+    maxHeight: 400,
+    borderRadius: 12,
+    marginBottom: 20,
+    backgroundColor: "#e3f2fd",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imagePlaceholderText: {
+    fontSize: 64,
+    fontWeight: "700",
+    color: "#999",
   },
   statusRow: {
     flexDirection: "row",
@@ -335,6 +465,15 @@ const styles = StyleSheet.create({
   required: {
     color: "#f44336",
   },
+  value: {
+    fontSize: 16,
+    color: "#333",
+    lineHeight: 22,
+  },
+  valueMuted: {
+    fontSize: 15,
+    color: "#999",
+  },
   input: {
     borderWidth: 1,
     borderColor: "#ddd",
@@ -353,9 +492,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     marginTop: 8,
-  },
-  saveButtonUpdate: {
-    backgroundColor: "#ff9800",
   },
   saveButtonText: {
     color: "#fff",

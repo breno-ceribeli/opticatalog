@@ -30,8 +30,9 @@ export default function RootLayout() {
       <Stack.Screen name="index" options={{ headerShown: false, orientation: "portrait" }} />
       <Stack.Screen name="camera" options={{ headerShown: false, orientation: "all" }} />
       <Stack.Screen name="preview" options={{ headerShown: false, orientation: "portrait" }} />
-      <Stack.Screen name="revisao" options={{ title: "Revisar análise", orientation: "portrait" }} />
+      <Stack.Screen name="revisao" options={{ title: "Análise", orientation: "portrait" }} />
       <Stack.Screen name="historico" options={{ title: "Inventário", orientation: "portrait" }} />
+      <Stack.Screen name="item/[id]" options={{ title: "Item", orientation: "portrait" }} />
     </Stack>
   );
 }

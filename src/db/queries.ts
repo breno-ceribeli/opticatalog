@@ -117,20 +117,36 @@ export function listarAnalisesNaoSincronizadas(): Analise[] {
   );
 }
 
+export function arquivoImagemEmUso(uri: string): boolean {
+  if (!uri) return false;
+  const analises = db.getFirstSync<{ total: number }>(
+    `SELECT COUNT(*) AS total FROM analises WHERE imagem_uri = ?`,
+    [uri]
+  );
+  const itens = db.getFirstSync<{ total: number }>(
+    `SELECT COUNT(*) AS total FROM itens_inventario WHERE imagem_uri = ?`,
+    [uri]
+  );
+  return (analises?.total ?? 0) > 0 || (itens?.total ?? 0) > 0;
+}
+
 export async function excluirAnalise(id: string): Promise<boolean> {
   const analise = obterAnalise(id);
   if (!analise) return false;
 
-  try {
-    const fileInfo = await FileSystem.getInfoAsync(analise.imagem_uri);
-    if (fileInfo.exists) {
-      await FileSystem.deleteAsync(analise.imagem_uri, { idempotent: true });
+  db.runSync(`DELETE FROM analises WHERE id = ?`, [id]);
+
+  if (!arquivoImagemEmUso(analise.imagem_uri)) {
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(analise.imagem_uri);
+      if (fileInfo.exists) {
+        await FileSystem.deleteAsync(analise.imagem_uri, { idempotent: true });
+      }
+    } catch (error) {
+      console.warn("Erro ao deletar arquivo de imagem:", error);
     }
-  } catch (error) {
-    console.warn("Erro ao deletar arquivo de imagem:", error);
   }
 
-  db.runSync(`DELETE FROM analises WHERE id = ?`, [id]);
   return true;
 }
 
@@ -199,6 +215,13 @@ export function obterItemPorAnalise(analiseId: string): ItemInventario | null {
   ) ?? null;
 }
 
+export function listarItensPorAnalise(analiseId: string): ItemInventario[] {
+  return db.getAllSync<ItemInventario>(
+    `SELECT * FROM itens_inventario WHERE analise_origem_id = ? ORDER BY criado_em DESC`,
+    [analiseId]
+  );
+}
+
 export function atualizarItemInventario(
   id: string,
   dados: Partial<Pick<ItemInventario, "nome" | "categoria" | "tags_json" | "descricao" | "identificador_ocr" | "imagem_uri" | "quantidade">>
@@ -246,8 +269,23 @@ export function atualizarItemInventario(
   db.runSync(`UPDATE itens_inventario SET ${campos.join(", ")} WHERE id = ?`, valores);
 }
 
-export function excluirItemInventario(id: string): boolean {
+export async function excluirItemInventario(id: string): Promise<boolean> {
+  const item = obterItemPorId(id);
+  if (!item) return false;
+
   db.runSync(`DELETE FROM itens_inventario WHERE id = ?`, [id]);
+
+  if (item.imagem_uri && !arquivoImagemEmUso(item.imagem_uri)) {
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(item.imagem_uri);
+      if (fileInfo.exists) {
+        await FileSystem.deleteAsync(item.imagem_uri, { idempotent: true });
+      }
+    } catch (error) {
+      console.warn("Erro ao deletar arquivo de imagem:", error);
+    }
+  }
+
   return true;
 }
 

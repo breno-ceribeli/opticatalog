@@ -1,10 +1,27 @@
 import { Stack } from "expo-router";
 import { useEffect } from "react";
+import { useFonts } from "expo-font";
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from "@expo-google-fonts/inter";
 import NetInfo from "@react-native-community/netinfo";
 import { iniciarBanco } from "../src/db/schema";
 import { sincronizarTudo } from "../src/services/sync";
+import { ThemeProvider } from "../src/theme";
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
+  });
+
   useEffect(() => {
     iniciarBanco();
 
@@ -25,14 +42,20 @@ export default function RootLayout() {
     return unsubscribe;
   }, []);
 
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false, orientation: "portrait" }} />
-      <Stack.Screen name="camera" options={{ headerShown: false, orientation: "all" }} />
-      <Stack.Screen name="preview" options={{ headerShown: false, orientation: "portrait" }} />
-      <Stack.Screen name="revisao" options={{ title: "Análise", orientation: "portrait" }} />
-      <Stack.Screen name="historico" options={{ title: "Inventário", orientation: "portrait" }} />
-      <Stack.Screen name="item/[id]" options={{ title: "Item", orientation: "portrait" }} />
-    </Stack>
+    <ThemeProvider>
+      <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false, orientation: "portrait" }} />
+        <Stack.Screen name="camera" options={{ headerShown: false, orientation: "all" }} />
+        <Stack.Screen name="preview" options={{ headerShown: false, orientation: "portrait" }} />
+        <Stack.Screen name="revisao" options={{ title: "Análise", orientation: "portrait" }} />
+        <Stack.Screen name="historico" options={{ title: "Inventário", orientation: "portrait" }} />
+        <Stack.Screen name="item/[id]" options={{ title: "Item", orientation: "portrait" }} />
+      </Stack>
+    </ThemeProvider>
   );
 }

@@ -1,12 +1,17 @@
 import { useState, useCallback } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, Alert } from "react-native";
+import { StyleSheet, Text, View, Image, ScrollView, Alert } from "react-native";
 import { useFocusEffect, router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
 import { listarItensInventario, ItemInventario } from "../src/db/queries";
+import { Screen, Card, PrimaryButton, IconPill } from "../src/components";
+import { useTheme, FONT, FONT_SIZES, spacing } from "../src/theme";
 
 export default function HomeScreen() {
+  const { colors, radius } = useTheme();
   const [itensRecentes, setItensRecentes] = useState<ItemInventario[]>([]);
 
   useFocusEffect(
@@ -72,161 +77,248 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.appName}>Opticatalog</Text>
-        <Text style={styles.tagline}>Inventário Visual</Text>
-      </View>
+    <Screen>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <LinearGradient
+          colors={[colors.gradientStart, colors.gradientEnd]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.hero, { borderRadius: radius.xl }]}
+        >
+          <View style={styles.heroTopRow}>
+            <View>
+              <Text style={styles.heroTitle}>Opticatalog</Text>
+              <Text style={styles.heroTagline}>Inventário Visual</Text>
+            </View>
+            <View style={styles.heroIconBadge}>
+              <Ionicons name="cube" size={26} color="#FFFFFF" />
+            </View>
+          </View>
+          <Text style={styles.heroDescription}>
+            Fotografe, catalogue e organize seus itens em um único lugar.
+          </Text>
+        </LinearGradient>
 
-      <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionCard} onPress={handleTirarFoto} activeOpacity={0.7}>
-          <Text style={styles.actionIcon}>📷</Text>
-          <Text style={styles.actionTitle}>Tirar foto</Text>
-          <Text style={styles.actionSubtitle}>Capturar com a câmera</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCard} onPress={handleEscolherGaleria} activeOpacity={0.7}>
-          <Text style={styles.actionIcon}>🖼️</Text>
-          <Text style={styles.actionTitle}>Galeria</Text>
-          <Text style={styles.actionSubtitle}>Escolher existente</Text>
-        </TouchableOpacity>
-      </View>
-
-      {itensRecentes.length > 0 && (
-        <View style={styles.recentSection}>
-          <Text style={styles.sectionTitle}>Itens recentes</Text>
-          <FlatList
-            data={itensRecentes}
-            keyExtractor={(item) => item.id}
-            scrollEnabled={false}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={styles.recentItem} onPress={() => handleItemPress(item)} activeOpacity={0.7}>
-                <View style={styles.recentItemIcon}>
-                  <Text style={styles.recentItemLetter}>{item.nome.charAt(0).toUpperCase()}</Text>
-                </View>
-                <View style={styles.recentItemInfo}>
-                  <Text style={styles.recentItemName}>{item.nome}</Text>
-                  <Text style={styles.recentItemCategory}>{item.categoria}</Text>
-                </View>
-              </TouchableOpacity>
-            )}
-          />
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Como quer começar?</Text>
+        <View style={styles.actionsRow}>
+          <Card onPress={handleTirarFoto} style={styles.actionCard}>
+            <IconPill name="camera" />
+            <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>Capturar</Text>
+            <Text style={[styles.actionSubtitle, { color: colors.textSecondary }]}>Tirar foto agora</Text>
+          </Card>
+          <Card onPress={handleEscolherGaleria} style={styles.actionCard}>
+            <IconPill name="images" />
+            <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>Galeria</Text>
+            <Text style={[styles.actionSubtitle, { color: colors.textSecondary }]}>Escolher existente</Text>
+          </Card>
         </View>
-      )}
 
-      <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push("/historico")} activeOpacity={0.7}>
-        <Text style={styles.viewAllText}>Ver inventário completo</Text>
-      </TouchableOpacity>
-    </View>
+        {itensRecentes.length > 0 && (
+          <>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Itens recentes</Text>
+            <View style={styles.recentList}>
+              {itensRecentes.map((item) => (
+                <Card
+                  key={item.id}
+                  onPress={() => handleItemPress(item)}
+                  style={styles.recentItem}
+                  contentStyle={styles.recentItemContent}
+                >
+                  {item.imagem_uri ? (
+                    <Image
+                      source={{ uri: item.imagem_uri }}
+                      style={[styles.recentThumb, { borderRadius: radius.md }]}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.recentMonogram,
+                        { backgroundColor: colors.surfaceMuted, borderRadius: radius.md },
+                      ]}
+                    >
+                      <Text style={[styles.recentMonogramText, { color: colors.primary }]}>
+                        {item.nome.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.recentInfo}>
+                    <Text
+                      style={[styles.recentName, { color: colors.textPrimary }]}
+                      numberOfLines={1}
+                    >
+                      {item.nome}
+                    </Text>
+                    <Text
+                      style={[styles.recentCategory, { color: colors.textSecondary }]}
+                      numberOfLines={1}
+                    >
+                      {item.categoria}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </Card>
+              ))}
+            </View>
+          </>
+        )}
+
+        {itensRecentes.length === 0 && (
+          <Card style={styles.emptyCard}>
+            <View style={styles.emptyIconWrapper}>
+              <Ionicons name="cube-outline" size={28} color={colors.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+              Nenhum item ainda
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+              Comece adicionando seu primeiro item ao inventário.
+            </Text>
+          </Card>
+        )}
+
+        <PrimaryButton
+          title="Ver inventário completo"
+          icon="arrow-forward"
+          onPress={() => router.push("/historico")}
+          style={styles.cta}
+        />
+      </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-    paddingHorizontal: 20,
+  content: {
+    padding: spacing.xxl,
+    paddingTop: spacing.xxxl,
+    paddingBottom: spacing.xxxl + spacing.xxl,
   },
-  header: {
-    alignItems: "center",
-    paddingTop: 60,
-    paddingBottom: 32,
+  hero: {
+    padding: spacing.xxl,
+    marginBottom: spacing.xxl,
   },
-  appName: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#2196f3",
-  },
-  tagline: {
-    fontSize: 16,
-    color: "#666",
-    marginTop: 4,
-  },
-  actions: {
+  heroTopRow: {
     flexDirection: "row",
-    gap: 12,
-    marginBottom: 32,
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
+  },
+  heroTitle: {
+    fontFamily: FONT.extrabold,
+    fontSize: FONT_SIZES.hero,
+    color: "#FFFFFF",
+    letterSpacing: -0.5,
+  },
+  heroTagline: {
+    fontFamily: FONT.medium,
+    fontSize: 15,
+    color: "rgba(255,255,255,0.85)",
+    marginTop: 2,
+  },
+  heroIconBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroDescription: {
+    fontFamily: FONT.regular,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "rgba(255,255,255,0.92)",
+  },
+  sectionTitle: {
+    fontFamily: FONT.bold,
+    fontSize: FONT_SIZES.heading,
+    marginBottom: spacing.md,
+  },
+  actionsRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginBottom: spacing.xxl,
   },
   actionCard: {
     flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 20,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  actionIcon: {
-    fontSize: 36,
-    marginBottom: 8,
   },
   actionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: FONT.semibold,
+    fontSize: 15,
+    marginTop: spacing.md,
   },
   actionSubtitle: {
+    fontFamily: FONT.regular,
     fontSize: 12,
-    color: "#999",
     marginTop: 2,
   },
-  recentSection: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
+  recentList: {
+    gap: spacing.sm,
+    marginBottom: spacing.xxl,
   },
   recentItem: {
+    padding: 12,
+  },
+  recentItemContent: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
   },
-  recentItemIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#e3f2fd",
-    justifyContent: "center",
+  recentThumb: {
+    width: 64,
+    height: 64,
+  },
+  recentMonogram: {
+    width: 64,
+    height: 64,
     alignItems: "center",
-    marginRight: 12,
+    justifyContent: "center",
   },
-  recentItemLetter: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#2196f3",
+  recentMonogramText: {
+    fontFamily: FONT.bold,
+    fontSize: 24,
   },
-  recentItemInfo: {
+  recentInfo: {
     flex: 1,
+    marginHorizontal: 14,
+    justifyContent: "center",
   },
-  recentItemName: {
+  recentName: {
+    fontFamily: FONT.semibold,
     fontSize: 15,
-    fontWeight: "600",
-    color: "#333",
   },
-  recentItemCategory: {
+  recentCategory: {
+    fontFamily: FONT.regular,
     fontSize: 13,
-    color: "#999",
     marginTop: 2,
   },
-  viewAllButton: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    paddingVertical: 14,
+  emptyCard: {
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#ddd",
+    padding: spacing.xxl,
+    marginBottom: spacing.xxl,
   },
-  viewAllText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#2196f3",
+  emptyIconWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "rgba(37,99,235,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    fontFamily: FONT.semibold,
+    fontSize: 16,
+  },
+  emptySubtitle: {
+    fontFamily: FONT.regular,
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  cta: {
+    marginTop: 4,
   },
 });

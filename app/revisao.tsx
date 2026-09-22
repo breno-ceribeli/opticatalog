@@ -1,5 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
-import { StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Alert } from "react-native";
+import {
+  StyleSheet,
+  View,
+  Text,
+  Image,
+  ActivityIndicator,
+  ScrollView,
+  TextInput,
+  Alert,
+  useWindowDimensions,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import {
   obterAnalise,
@@ -13,8 +25,12 @@ import {
 import { analisarImagem, lerTextoOcr } from "../src/services/visionApi";
 import NetInfo from "@react-native-community/netinfo";
 import { syncAnalisePeloId, syncItemPeloId, AnaliseRemota } from "../src/services/sync";
+import { Card, Screen, PrimaryButton, GhostButton } from "../src/components";
+import { useTheme, FONT, FONT_SIZES, spacing, radius } from "../src/theme";
 
 export default function RevisaoScreen() {
+  const { colors } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const { uri, analysisId, remota } = useLocalSearchParams<{ uri: string; analysisId: string; remota?: string }>();
   const [analise, setAnalise] = useState<Analise | null>(null);
   const [analiseRemota, setAnaliseRemota] = useState<AnaliseRemota | null>(null);
@@ -26,7 +42,7 @@ export default function RevisaoScreen() {
   const [tags, setTags] = useState("");
   const [descricao, setDescricao] = useState("");
   const [itemExistente, setItemExistente] = useState<ItemInventario | null>(null);
-  const [imagemAspect, setImagemAspect] = useState<number | null>(null);
+  const [imagemSize, setImagemSize] = useState<{ width: number; height: number } | null>(null);
 
   const imagemUri = uri || analiseRemota?.imagem_url || null;
 
@@ -38,14 +54,20 @@ export default function RevisaoScreen() {
 
   useEffect(() => {
     if (!imagemUri) return;
+    setImagemSize(null);
     Image.getSize(
       imagemUri,
       (w, h) => {
-        if (w > 0 && h > 0) setImagemAspect(w / h);
+        if (w > 0 && h > 0) {
+          const maxW = screenWidth - spacing.lg * 2;
+          const maxH = 400;
+          const scale = Math.min(maxW / w, maxH / h);
+          setImagemSize({ width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) });
+        }
       },
       () => {}
     );
-  }, [imagemUri]);
+  }, [imagemUri, screenWidth]);
 
   const carregarAnalise = useCallback(() => {
     if (remota) {
@@ -177,36 +199,30 @@ export default function RevisaoScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#333" />
-        <Text style={styles.loadingText}>Carregando análise...</Text>
-      </View>
+      <Screen style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Carregando análise...</Text>
+      </Screen>
     );
   }
 
   if (!analise && !analiseRemota) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Análise não encontrada.</Text>
-      </View>
+      <Screen style={styles.loadingContainer}>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Análise não encontrada.</Text>
+      </Screen>
     );
   }
 
-  const statusColors: Record<string, string> = {
-    pendente: "#ffa500",
-    processado: "#4caf50",
-    erro: "#f44336",
-  };
-
-  const statusLabels: Record<string, string> = {
-    pendente: "Pendente",
-    processado: "Processado",
-    erro: "Erro",
-  };
-
   const statusKey = analiseRemota?.status ?? analise?.status ?? "pendente";
-  const statusColor = statusColors[statusKey] ?? "#999";
-  const statusLabel = statusLabels[statusKey] ?? statusKey;
+  const statusCfg =
+    statusKey === "pendente"
+      ? { bg: colors.warningSoft, fg: colors.warning, icon: "time-outline", label: "Pendente" }
+      : statusKey === "erro"
+        ? { bg: colors.dangerSoft, fg: colors.danger, icon: "alert-circle-outline", label: "Erro" }
+        : { bg: colors.successSoft, fg: colors.success, icon: "checkmark-circle-outline", label: "Processado" };
+
+  const textoOcr = analiseRemota?.texto_ocr ?? analise?.texto_ocr ?? null;
 
   const formatarData = (ts: number) => {
     try {
@@ -227,281 +243,332 @@ export default function RevisaoScreen() {
     const labels: string[] = analiseRemota
       ? (Array.isArray(analiseRemota.labels) ? analiseRemota.labels.map((l: any) => l.name ?? "").filter(Boolean) : [])
       : (analise?.labels_json ? JSON.parse(analise.labels_json).map((l: any) => l.name) : []);
-    const textoOcr = analiseRemota?.texto_ocr ?? analise?.texto_ocr ?? null;
     const data = analiseRemota
       ? formatarData(new Date(analiseRemota.criado_em).getTime())
       : formatarData(analise?.criado_em ?? 0);
 
     return (
       <>
-        <View style={styles.section}>
-          <Text style={styles.label}>Nome do objeto</Text>
-          <Text style={styles.value}>{objeto ?? "—"}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Tags detectadas</Text>
-          {labels.length > 0 ? (
-            <Text style={styles.value}>{labels.join(", ")}</Text>
-          ) : (
-            <Text style={styles.valueMuted}>Nenhuma tag detectada</Text>
+        <Card style={styles.resumoCard}>
+          <Text style={[styles.resumoLabel, { color: colors.textMuted }]}>OBJETO DETECTADO</Text>
+          <Text style={[styles.resumoValue, { color: colors.textPrimary }]}>{objeto ?? "—"}</Text>
+          {labels.length > 0 && (
+            <View style={styles.tagsRow}>
+              {labels.map((tag, i) => (
+                <View key={i} style={[styles.tag, { backgroundColor: colors.surfaceMuted }]}>
+                  <Text style={[styles.tagText, { color: colors.textSecondary }]} numberOfLines={1}>#{tag}</Text>
+                </View>
+              ))}
+            </View>
           )}
-        </View>
+        </Card>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Texto OCR</Text>
+        <Card style={styles.resumoCard}>
+          <Text style={[styles.resumoLabel, { color: colors.textMuted }]}>TEXTO OCR</Text>
           {textoOcr ? (
-            <Text style={styles.value}>{textoOcr}</Text>
+            <Text style={[styles.resumoValue, { color: colors.textPrimary }]}>{textoOcr}</Text>
           ) : (
-            <Text style={styles.valueMuted}>Nenhum texto lido</Text>
+            <View style={styles.emptyResumo}>
+              <Ionicons name="text-outline" size={18} color={colors.textMuted} />
+              <Text style={[styles.resumoMuted, { color: colors.textMuted }]}>Nenhum texto lido</Text>
+            </View>
           )}
-        </View>
+        </Card>
 
-        <Text style={styles.itemSavedHint}>Analisada em {data}</Text>
+        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+          <View style={styles.footerRow}>
+            <Text style={[styles.footerLabel, { color: colors.textMuted }]}>Analisada em</Text>
+            <Text style={[styles.footerValue, { color: colors.textSecondary }]}>{data}</Text>
+          </View>
+        </View>
       </>
     );
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      {imagemUri ? (
-        <Image
-          source={{ uri: imagemUri }}
-          style={[styles.image, imagemAspect ? { aspectRatio: imagemAspect } : null]}
-          resizeMode="contain"
-        />
-      ) : (
-        <View style={styles.imagePlaceholder}>
-          <Text style={styles.imagePlaceholderText}>?</Text>
-        </View>
-      )}
-
-      <View style={styles.statusRow}>
-        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-          <Text style={styles.statusText}>{statusLabel}</Text>
-        </View>
-        {!analiseRemota && analise && (analise.status === "erro" || analise.status === "pendente") && (
-          <TouchableOpacity style={styles.retryButton} onPress={handleReanalisar} disabled={analyzing}>
-            <Text style={styles.retryButtonText}>{analyzing ? "Analisando..." : "Analisar agora"}</Text>
-          </TouchableOpacity>
-        )}
-        {!analiseRemota && analise && (analise.texto_ocr ? (
-          <View style={[styles.ocrButton, styles.ocrButtonDone]}>
-            <Text style={styles.ocrButtonText}>Texto já lido</Text>
-          </View>
-        ) : (
-          <TouchableOpacity style={styles.ocrButton} onPress={handleLerTexto} disabled={readingText}>
-            <Text style={styles.ocrButtonText}>{readingText ? "Lendo..." : "Ler texto"}</Text>
-          </TouchableOpacity>
-        ))}
-        {analiseRemota && (
-          <View style={[styles.statusBadge, { backgroundColor: "#9c27b0" }]}>
-            <Text style={styles.statusText}>Nuvem</Text>
-          </View>
-        )}
-      </View>
-
-      {modo === "criar" ? (
-        <>
-          <View style={styles.section}>
-            <Text style={styles.label}>Nome do objeto</Text>
-            <TextInput
-              style={styles.input}
-              value={nome}
-              onChangeText={setNome}
-              placeholder="Ex: Cadeira, Furadeira, Notebook"
-            />
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.label}>Categoria <Text style={styles.required}>*</Text></Text>
-            <TextInput
-              style={styles.input}
-              value={categoria}
-              onChangeText={setCategoria}
-              placeholder="Ex: Móveis, Ferramentas, Eletrônicos"
-            />
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.label}>Tags (sugeridas pela IA, editáveis)</Text>
-            <TextInput
-              style={styles.input}
-              value={tags}
-              onChangeText={setTags}
-              placeholder="Ex: furniture, wood, chair"
-            />
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.label}>Descrição (opcional)</Text>
-            <TextInput
-              style={[styles.input, styles.inputMultiline]}
-              value={descricao}
-              onChangeText={setDescricao}
-              placeholder="Detalhes, número de série, observações..."
-              multiline
-              numberOfLines={3}
-            />
-          </View>
-
-          <TouchableOpacity style={styles.saveButton} onPress={handleSalvar} activeOpacity={0.7}>
-            <Text style={styles.saveButtonText}>Salvar no inventário</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <>
-          {renderResumo()}
-
-          {itemExistente ? (
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={() => router.push({ pathname: "/item/[id]", params: { id: itemExistente.id } } as any)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.saveButtonText}>Ver item</Text>
-            </TouchableOpacity>
+    <Screen>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.imageWrap}>
+          {imagemUri ? (
+            imagemSize ? (
+              <Image
+                source={{ uri: imagemUri }}
+                style={[styles.image, { width: imagemSize.width, height: imagemSize.height, borderRadius: radius.md }]}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.imageLoading, { backgroundColor: colors.surfaceMuted, borderRadius: radius.xl }]} />
+            )
           ) : (
-            <Text style={styles.itemSavedHint}>Análise da nuvem (somente leitura).</Text>
+            <LinearGradient
+              colors={[colors.gradientStart, colors.gradientEnd]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.imagePlaceholder, { borderRadius: radius.xl }]}
+            >
+              <Ionicons name="image-outline" size={44} color="#FFFFFF" />
+            </LinearGradient>
           )}
-        </>
-      )}
-    </ScrollView>
+        </View>
+
+        <View style={styles.chipsRow}>
+          <View style={[styles.chip, { backgroundColor: statusCfg.bg }]}>
+            <Ionicons name={statusCfg.icon as any} size={13} color={statusCfg.fg} />
+            <Text style={[styles.chipText, { color: statusCfg.fg }]}>{statusCfg.label}</Text>
+          </View>
+          {analiseRemota && (
+            <View style={[styles.chip, { backgroundColor: colors.infoSoft }]}>
+              <Ionicons name="cloud" size={13} color={colors.info} />
+              <Text style={[styles.chipText, { color: colors.info }]}>Nuvem</Text>
+            </View>
+          )}
+          {itemExistente && (
+            <View style={[styles.chip, { backgroundColor: colors.successSoft }]}>
+              <Ionicons name="link-outline" size={13} color={colors.success} />
+              <Text style={[styles.chipText, { color: colors.success }]} numberOfLines={1}>Item vinculado</Text>
+            </View>
+          )}
+        </View>
+
+        {modo === "criar" ? (
+          <>
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: colors.textMuted }]}>NOME DO OBJETO</Text>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.textPrimary }]}
+                value={nome}
+                onChangeText={setNome}
+                placeholder="Ex: Cadeira, Furadeira, Notebook"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: colors.textMuted }]}>CATEGORIA <Text style={[styles.required, { color: colors.danger }]}>*</Text></Text>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.textPrimary }]}
+                value={categoria}
+                onChangeText={setCategoria}
+                placeholder="Ex: Móveis, Ferramentas, Eletrônicos"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: colors.textMuted }]}>TAGS (SUGERIDAS PELA IA, EDITÁVEIS)</Text>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.textPrimary }]}
+                value={tags}
+                onChangeText={setTags}
+                placeholder="Ex: furniture, wood, chair"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: colors.textMuted }]}>DESCRIÇÃO (OPCIONAL)</Text>
+              <TextInput
+                style={[styles.input, styles.inputMultiline, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.textPrimary }]}
+                value={descricao}
+                onChangeText={setDescricao}
+                placeholder="Detalhes, número de série, observações..."
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            {!analiseRemota && analise && (analise.status === "erro" || analise.status === "pendente") && (
+              <GhostButton
+                title={analyzing ? "Analisando..." : "Analisar agora"}
+                icon="sparkles"
+                disabled={analyzing}
+                onPress={handleReanalisar}
+                style={styles.ghostBtn}
+              />
+            )}
+            {!analiseRemota && analise && !analise.texto_ocr && (
+              <GhostButton
+                title={readingText ? "Lendo..." : "Ler texto (OCR)"}
+                icon="text"
+                disabled={readingText}
+                onPress={handleLerTexto}
+                style={styles.ghostBtn}
+              />
+            )}
+
+            <PrimaryButton title="Salvar no inventário" icon="checkmark" onPress={handleSalvar} style={styles.saveBtn} />
+          </>
+        ) : (
+          <>
+            {renderResumo()}
+
+            {itemExistente ? (
+              <PrimaryButton
+                title="Ver item"
+                icon="arrow-forward"
+                onPress={() => router.push({ pathname: "/item/[id]", params: { id: itemExistente.id } } as any)}
+                style={styles.saveBtn}
+              />
+            ) : (
+              <Text style={[styles.savedHint, { color: colors.textMuted }]}>Análise da nuvem (somente leitura).</Text>
+            )}
+          </>
+        )}
+      </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#666",
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZES.body,
+    marginTop: spacing.md,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxxl,
+  },
+  imageWrap: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+    minHeight: 120,
   },
   image: {
+    backgroundColor: "transparent",
+  },
+  imageLoading: {
     width: "100%",
-    aspectRatio: 1,
-    maxHeight: 400,
-    borderRadius: 12,
-    marginBottom: 20,
-    backgroundColor: "#f0f0f0",
+    aspectRatio: 2,
   },
   imagePlaceholder: {
     width: "100%",
-    aspectRatio: 1,
-    maxHeight: 400,
-    borderRadius: 12,
-    marginBottom: 20,
-    backgroundColor: "#e3f2fd",
-    justifyContent: "center",
+    aspectRatio: 16 / 10,
     alignItems: "center",
+    justifyContent: "center",
   },
-  imagePlaceholderText: {
-    fontSize: 64,
-    fontWeight: "700",
-    color: "#999",
+  chipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
   },
-  statusRow: {
+  chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 24,
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    maxWidth: "70%",
   },
-  statusBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  statusText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  retryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: "#2196f3",
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  ocrButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: "#9c27b0",
-    borderRadius: 8,
-  },
-  ocrButtonDone: {
-    backgroundColor: "#999",
-  },
-  ocrButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 14,
+  chipText: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
+    flexShrink: 1,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   label: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: spacing.xs,
+    paddingHorizontal: 2,
   },
   required: {
-    color: "#f44336",
-  },
-  value: {
-    fontSize: 16,
-    color: "#333",
-    lineHeight: 22,
-  },
-  valueMuted: {
-    fontSize: 15,
-    color: "#999",
+    fontFamily: FONT.bold,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 14,
-    fontSize: 16,
-    backgroundColor: "#fafafa",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZES.body,
   },
   inputMultiline: {
     minHeight: 100,
     textAlignVertical: "top",
   },
-  saveButton: {
-    backgroundColor: "#2196f3",
-    paddingVertical: 16,
-    borderRadius: 8,
+  ghostBtn: {
+    marginTop: spacing.md,
+  },
+  saveBtn: {
+    marginTop: spacing.md,
+  },
+  resumoCard: {
+    marginBottom: spacing.md,
+  },
+  resumoLabel: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: spacing.xs,
+  },
+  resumoValue: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZES.body,
+    lineHeight: 22,
+  },
+  resumoMuted: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZES.body,
+  },
+  emptyResumo: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 8,
+    gap: spacing.sm,
   },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
+  tagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: spacing.sm,
   },
-  itemSavedHint: {
-    fontSize: 13,
-    color: "#999",
+  tag: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    maxWidth: 140,
+  },
+  tagText: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZES.caption,
+  },
+  savedHint: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZES.caption,
     textAlign: "center",
-    marginTop: 8,
+    marginTop: spacing.lg,
+  },
+  footer: {
+    marginTop: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  footerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  footerLabel: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZES.caption,
+  },
+  footerValue: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZES.body,
   },
 });

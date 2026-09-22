@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, Alert, useWindowDimensions } from "react-native";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
+
+const RATIO = 4 / 3;
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -97,13 +100,32 @@ export default function CameraScreen() {
     setCameraType((prev) => (prev === "back" ? "front" : "back"));
   };
 
+  if (!isMounted) {
+    return <View style={styles.container} />;
+  }
+
+  const frame = isLandscape
+    ? (() => {
+        const h = height;
+        const w = h * RATIO;
+        if (w > width) {
+          return { width: Math.round(width), height: Math.round(width / RATIO) };
+        }
+        return { width: Math.round(w), height: Math.round(h) };
+      })()
+    : (() => {
+        const w = width;
+        return { width: Math.round(w), height: Math.round(w * 4 / 3) };
+      })();
+
   return (
     <View style={styles.container}>
       <CameraView
         ref={cameraRef}
-        style={styles.camera}
+        style={{ width: frame.width, height: frame.height }}
         facing={cameraType}
         autofocus="on"
+        ratio="4:3"
       />
 
       <TouchableOpacity
@@ -111,13 +133,13 @@ export default function CameraScreen() {
         onPress={() => router.back()}
         activeOpacity={0.7}
       >
-        <Text style={styles.backIcon}>←</Text>
+        <Ionicons name="close" size={22} color="#FFFFFF" />
       </TouchableOpacity>
 
       {isLandscape ? (
         <View style={[styles.controlsLandscape, { right: insets.right + 20 }]}>
           <TouchableOpacity style={styles.iconButton} onPress={flipCamera} activeOpacity={0.7}>
-            <Text style={styles.iconText}>🔄</Text>
+            <Ionicons name="camera-reverse-outline" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.captureButton} onPress={takePicture} activeOpacity={0.7}>
             <View style={styles.captureInner} />
@@ -136,7 +158,7 @@ export default function CameraScreen() {
             onPress={flipCamera}
             activeOpacity={0.7}
           >
-            <Text style={styles.iconText}>🔄</Text>
+            <Ionicons name="camera-reverse-outline" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       )}
@@ -151,10 +173,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  camera: {
-    flex: 1,
-    width: "100%",
-  },
   backButton: {
     position: "absolute",
     width: 44,
@@ -163,11 +181,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
     alignItems: "center",
-  },
-  backIcon: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: "600",
   },
   controls: {
     position: "absolute",
@@ -201,9 +214,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.2)",
     justifyContent: "center",
     alignItems: "center",
-  },
-  iconText: {
-    fontSize: 24,
   },
   captureButton: {
     width: 80,

@@ -1,11 +1,16 @@
 import { useState, useEffect, useRef } from "react";
-import { StyleSheet, View, Image, TouchableOpacity, Text, Alert } from "react-native";
+import { StyleSheet, View, Image, TouchableOpacity, Text, Alert, ActivityIndicator } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as FileSystem from "expo-file-system/legacy";
 import { criarAnalise, atualizarAnalise } from "../src/db/queries";
 import NetInfo from "@react-native-community/netinfo";
 import { analisarImagem } from "../src/services/visionApi";
 import { syncAnalisePeloId } from "../src/services/sync";
+import { PrimaryButton } from "../src/components";
+import { FONT, FONT_SIZES, spacing, radius } from "../src/theme";
 
 export default function PreviewScreen() {
   const { uri } = useLocalSearchParams<{ uri: string }>();
@@ -14,6 +19,7 @@ export default function PreviewScreen() {
   const uriRef = useRef(uri);
   const photoUsedRef = useRef(false);
   const analysisIdRef = useRef<string | null>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     uriRef.current = uri;
@@ -105,16 +111,33 @@ export default function PreviewScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="light" />
+      <Text style={[styles.hint, { top: insets.top + 12 }]}>Confira a foto</Text>
       <Image source={{ uri }} style={styles.image} resizeMode="contain" />
-      <View style={styles.buttonRow}>
-        <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={handleTirarDeNovo} activeOpacity={0.7} disabled={saving || analyzing}>
-          <Text style={styles.buttonTextSecondary}>Tirar de novo</Text>
+      <View style={[styles.buttonRow, { paddingBottom: insets.bottom + 20 }]}>
+        <TouchableOpacity
+          style={[styles.secondaryBtn, { borderRadius: radius.md }]}
+          onPress={handleTirarDeNovo}
+          activeOpacity={0.7}
+          disabled={saving || analyzing}
+        >
+          <Ionicons name="camera-reverse-outline" size={18} color="#FFFFFF" />
+          <Text style={styles.secondaryBtnText}>Tirar de novo</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, styles.buttonPrimary]} onPress={handleUsarFoto} activeOpacity={0.7} disabled={saving || analyzing}>
-          <Text style={styles.buttonTextPrimary}>
-            {saving ? "Salvando..." : analyzing ? "Analisando..." : "Usar esta foto"}
-          </Text>
-        </TouchableOpacity>
+        <PrimaryButton
+          title={saving ? "Salvando..." : analyzing ? "Analisando..." : "Usar esta foto"}
+          icon={saving || analyzing ? undefined : "checkmark"}
+          onPress={handleUsarFoto}
+          disabled={saving || analyzing}
+          style={[
+            styles.primaryBtn,
+            {
+              borderRadius: radius.md,
+              opacity: saving || analyzing ? 0.8 : 1,
+            },
+          ]}
+        />
+        {(saving || analyzing) && <ActivityIndicator size="small" color="#FFFFFF" style={styles.progress} />}
       </View>
     </View>
   );
@@ -125,46 +148,52 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000",
   },
+  hint: {
+    position: "absolute",
+    alignSelf: "center",
+    color: "#FFFFFF",
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.body,
+    letterSpacing: 0.4,
+  },
   image: {
     flex: 1,
     width: "100%",
   },
   buttonRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-    position: "absolute",
-    bottom: 0,
-    width: "100%",
-    backgroundColor: "rgba(0,0,0,0.7)",
-  },
-  button: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 8,
-    justifyContent: "center",
     alignItems: "center",
-    marginHorizontal: 8,
-    minWidth: 140,
+    justifyContent: "center",
+    gap: spacing.md,
+    paddingTop: 20,
+    paddingHorizontal: spacing.lg,
+    width: "100%",
+    backgroundColor: "rgba(0,0,0,0.75)",
   },
-  buttonPrimary: {
-    backgroundColor: "#fff",
+  secondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.6)",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    flexShrink: 1,
   },
-  buttonSecondary: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderWidth: 1,
-    borderColor: "#fff",
+  secondaryBtnText: {
+    color: "#FFFFFF",
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.body,
   },
-  buttonTextPrimary: {
-    color: "#000",
-    fontSize: 16,
-    fontWeight: "600",
+  primaryBtn: {
+    flex: 1,
+    minWidth: 160,
   },
-  buttonTextSecondary: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
+  progress: {
+    position: "absolute",
+    right: spacing.lg,
   },
   loadingText: {
     color: "#fff",

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, Alert, useWindowDimensions } from "react-native";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
+import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -120,6 +121,7 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="light" />
       <CameraView
         ref={cameraRef}
         style={{ width: frame.width, height: frame.height }}

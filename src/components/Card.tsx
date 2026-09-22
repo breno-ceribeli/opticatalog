@@ -4,11 +4,12 @@ import { useTheme } from "../theme";
 
 type CardProps = PropsWithChildren<{
   style?: StyleProp<ViewStyle>;
-  onPress?: () => void;
   contentStyle?: StyleProp<ViewStyle>;
+  onPress?: () => void;
+  onLongPress?: () => void;
 }>;
 
-export function Card({ children, style, onPress, contentStyle }: CardProps) {
+export function Card({ children, style, contentStyle, onPress, onLongPress }: CardProps) {
   const { colors, radius, shadows } = useTheme();
 
   const baseStyle = [
@@ -24,7 +25,7 @@ export function Card({ children, style, onPress, contentStyle }: CardProps) {
 
   if (onPress) {
     return (
-      <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={baseStyle}>
+      <TouchableOpacity activeOpacity={0.85} onPress={onPress} onLongPress={onLongPress} style={baseStyle}>
         <View style={contentStyle}>{children}</View>
       </TouchableOpacity>
     );

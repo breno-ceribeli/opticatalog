@@ -11,7 +11,29 @@ import {
 import NetInfo from "@react-native-community/netinfo";
 import { iniciarBanco } from "../src/db/schema";
 import { sincronizarTudo } from "../src/services/sync";
-import { ThemeProvider } from "../src/theme";
+import { ThemeProvider, useTheme, FONT } from "../src/theme";
+
+function AppNavigator() {
+  const { colors } = useTheme();
+  return (
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.surface },
+        headerShadowVisible: false,
+        headerTintColor: colors.textPrimary,
+        headerTitleStyle: { fontFamily: FONT.semibold },
+        headerTitleAlign: "center",
+      }}
+    >
+      <Stack.Screen name="index" options={{ headerShown: false, orientation: "portrait" }} />
+      <Stack.Screen name="camera" options={{ headerShown: false, orientation: "all" }} />
+      <Stack.Screen name="preview" options={{ headerShown: false, orientation: "portrait" }} />
+      <Stack.Screen name="revisao" options={{ title: "Análise", orientation: "portrait" }} />
+      <Stack.Screen name="historico" options={{ title: "Inventário", orientation: "portrait" }} />
+      <Stack.Screen name="item/[id]" options={{ title: "Item", orientation: "portrait" }} />
+    </Stack>
+  );
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -48,14 +70,7 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false, orientation: "portrait" }} />
-        <Stack.Screen name="camera" options={{ headerShown: false, orientation: "all" }} />
-        <Stack.Screen name="preview" options={{ headerShown: false, orientation: "portrait" }} />
-        <Stack.Screen name="revisao" options={{ title: "Análise", orientation: "portrait" }} />
-        <Stack.Screen name="historico" options={{ title: "Inventário", orientation: "portrait" }} />
-        <Stack.Screen name="item/[id]" options={{ title: "Item", orientation: "portrait" }} />
-      </Stack>
+      <AppNavigator />
     </ThemeProvider>
   );
 }

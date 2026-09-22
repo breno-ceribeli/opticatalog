@@ -1,7 +1,12 @@
 import { useState, useCallback, useEffect } from "react";
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert, ScrollView } from "react-native";
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, FlatList } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import NetInfo from "@react-native-community/netinfo";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { Card, Screen, PrimaryButton, GhostButton } from "../src/components";
+import { useTheme, FONT, FONT_SIZES, spacing, radius } from "../src/theme";
+import type { IoniconName } from "../src/components/icons";
 import {
   listarAnalises,
   Analise,
@@ -27,6 +32,153 @@ type LinhaItem =
   | { tipo: "local"; item: ItemInventario }
   | { tipo: "nuvem"; item: ItemRemota };
 
+function SyncChip({ sincronizado }: { sincronizado: number }) {
+  const { colors } = useTheme();
+  const ok = sincronizado === 1;
+  const color = ok ? colors.success : colors.warning;
+  const bg = ok ? colors.successSoft : colors.warningSoft;
+  return (
+    <View style={[styles.syncChip, { backgroundColor: bg }]}>
+      <Ionicons name={ok ? "cloud-done-outline" : "cloud-upload-outline"} size={13} color={color} />
+      <Text style={[styles.syncChipText, { color }]}>{ok ? "Sincronizado" : "Não sincronizado"}</Text>
+    </View>
+  );
+}
+
+function CategoriaChip({ categoria }: { categoria: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.categoryChip, { backgroundColor: colors.infoSoft }]}>
+      <Ionicons name="pricetag" size={12} color={colors.info} />
+      <Text style={[styles.categoryChipText, { color: colors.info }]} numberOfLines={1}>{categoria}</Text>
+    </View>
+  );
+}
+
+function TagChip({ tag }: { tag: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.tag, { backgroundColor: colors.surfaceMuted }]}>
+      <Text style={[styles.tagText, { color: colors.textSecondary }]} numberOfLines={1}>#{tag}</Text>
+    </View>
+  );
+}
+
+function CloudBadge() {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.cloudChip, { backgroundColor: colors.infoSoft }]}>
+      <Ionicons name="cloud" size={12} color={colors.info} />
+      <Text style={[styles.cloudChipText, { color: colors.info }]}>Nuvem</Text>
+    </View>
+  );
+}
+
+function LocalBadge() {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.localChip, { backgroundColor: colors.surfaceMuted }]}>
+      <Ionicons name="phone-portrait" size={12} color={colors.primary} />
+      <Text style={[styles.localChipText, { color: colors.primary }]}>Local</Text>
+    </View>
+  );
+}
+
+function BaixarButton({
+  label,
+  busy,
+  onPress,
+}: {
+  label: string;
+  busy: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress}
+      disabled={busy}
+    >
+      <LinearGradient
+        colors={[colors.gradientStart, colors.gradientEnd]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[styles.downloadChip, { opacity: busy ? 0.7 : 1 }]}
+      >
+        <Ionicons name={busy ? "hourglass-outline" : "download-outline"} size={14} color="#FFFFFF" />
+        <Text style={styles.downloadChipText}>{label}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
+function FilterChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  if (active) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
+        <LinearGradient
+          colors={[colors.gradientStart, colors.gradientEnd]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.filterChipGradient}
+        >
+          <Text style={styles.filterChipTextActive}>{label}</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
+      <View style={[styles.filterChipIdle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.filterChipTextIdle, { color: colors.textSecondary }]}>{label}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function FiltroChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  if (active) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
+        <LinearGradient
+          colors={[colors.gradientStart, colors.gradientEnd]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.filtroChipGradient}
+        >
+          <Text style={styles.filtroChipTextActive}>{label}</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
+      <View style={[styles.filtroChipIdle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.filtroChipTextIdle, { color: colors.textSecondary }]}>{label}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function HistoricoScreen() {
   const [tab, setTab] = useState<Tab>("analises");
   const [analises, setAnalises] = useState<Analise[]>([]);
@@ -45,6 +197,8 @@ export default function HistoricoScreen() {
   const [baixandoItemId, setBaixandoItemId] = useState<string | null>(null);
   const [categoriasFiltro, setCategoriasFiltro] = useState<string[]>([]);
   const [tagsFiltro, setTagsFiltro] = useState<string[]>([]);
+
+  const { colors } = useTheme();
 
   const carregarDados = useCallback(() => {
     setLoading(true);
@@ -88,15 +242,6 @@ export default function HistoricoScreen() {
       });
     } catch {
       return "";
-    }
-  };
-
-  const getStatusColor = (status: Analise["status"]) => {
-    switch (status) {
-      case "pendente": return "#ffa500";
-      case "processado": return "#4caf50";
-      case "erro": return "#f44336";
-      default: return "#999";
     }
   };
 
@@ -382,49 +527,70 @@ export default function HistoricoScreen() {
     setTagsFiltro([]);
   };
 
-  const renderAnalise = ({ item }: { item: Analise }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => router.push({ pathname: "/revisao", params: { uri: item.imagem_uri, analysisId: item.id } } as any)}
-      onLongPress={() => handleExcluirAnalise(item.id)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.cardContent}>
-        <Image source={{ uri: item.imagem_uri }} style={styles.thumbnail} />
+  const statusCfg = (status: Analise["status"], colors: ReturnType<typeof useTheme>["colors"]) => {
+    switch (status) {
+      case "pendente": return { bg: colors.warningSoft, fg: colors.warning, icon: "time-outline" as IoniconName };
+      case "processado": return { bg: colors.successSoft, fg: colors.success, icon: "checkmark-circle-outline" as IoniconName };
+      case "erro": return { bg: colors.dangerSoft, fg: colors.danger, icon: "alert-circle-outline" as IoniconName };
+      default: return { bg: colors.surfaceMuted, fg: colors.textMuted, icon: "ellipse-outline" as IoniconName };
+    }
+  };
+
+  const renderAnalise = ({ item }: { item: Analise }) => {
+    const cfg = statusCfg(item.status, colors);
+    return (
+      <Card
+        style={styles.card}
+        contentStyle={styles.cardContent}
+        onPress={() => router.push({ pathname: "/revisao", params: { uri: item.imagem_uri, analysisId: item.id } } as any)}
+        onLongPress={() => handleExcluirAnalise(item.id)}
+      >
+        {item.imagem_uri ? (
+          <Image source={{ uri: item.imagem_uri }} style={[styles.thumb, { borderRadius: radius.md }]} />
+        ) : (
+          <View style={[styles.thumb, styles.thumbFallback, { backgroundColor: colors.surfaceMuted, borderRadius: radius.md }]}>
+            <Ionicons name="image-outline" size={26} color={colors.textMuted} />
+          </View>
+        )}
         <View style={styles.cardInfo}>
-          <View style={styles.cardHeader}>
-            <Text style={[styles.cardStatus, { color: getStatusColor(item.status) }]}>
-              {getStatusLabel(item.status)}
-            </Text>
-            <Text style={styles.cardDate}>{formatarData(item.criado_em)}</Text>
+          <View style={styles.cardTopRow}>
+            <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
+              <Ionicons name={cfg.icon} size={13} color={cfg.fg} />
+              <Text style={[styles.badgeText, { color: cfg.fg }]}>{getStatusLabel(item.status)}</Text>
+            </View>
+            <Text style={[styles.cardDate, { color: colors.textMuted }]}>{formatarData(item.criado_em)}</Text>
           </View>
           {item.objeto_detectado && (
-            <Text style={styles.cardObject}>{item.objeto_detectado}</Text>
+            <Text style={[styles.cardObject, { color: colors.textPrimary }]} numberOfLines={1}>{item.objeto_detectado}</Text>
           )}
           <View style={styles.cardFooter}>
-            <Text style={styles.cardId}>ID: {item.id.slice(0, 8)}...</Text>
-            {item.sincronizado === 0 ? (
-              <Text style={styles.syncPending}>Nao sincronizado</Text>
-            ) : (
-              <Text style={styles.syncOk}>Sincronizado</Text>
-            )}
+            <Text style={[styles.cardId, { color: colors.textMuted }]}>ID: {item.id.slice(0, 8)}…</Text>
+            <SyncChip sincronizado={item.sincronizado} />
           </View>
           {item.status === "pendente" && (
             <TouchableOpacity
-              style={styles.analyzeButton}
+              style={[styles.cta, { opacity: analyzingId === item.id ? 0.7 : 1 }]}
               onPress={() => handleAnalisar(item)}
               disabled={analyzingId === item.id}
-              activeOpacity={0.7}
             >
-              <Text style={styles.analyzeButtonText}>
-                {analyzingId === item.id ? "Analisando..." : "Analisar agora"}
-              </Text>
+              <LinearGradient
+                colors={[colors.gradientStart, colors.gradientEnd]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.ctaGradient}
+              >
+                <Ionicons name="sparkles" size={15} color="#FFFFFF" />
+                <Text style={styles.ctaText}>
+                  {analyzingId === item.id ? "Analisando..." : "Analisar agora"}
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
           )}
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Card>
+    );
+  };
 
   const renderAnaliseNuvem = ({ item }: { item: AnaliseRemota }) => {
     const labels: string[] = Array.isArray(item.labels)
@@ -432,37 +598,34 @@ export default function HistoricoScreen() {
       : [];
 
     return (
-      <TouchableOpacity
+      <Card
         style={styles.card}
+        contentStyle={styles.cardContent}
         onPress={() => router.push({ pathname: "/revisao", params: { remota: JSON.stringify(item) } } as any)}
-        activeOpacity={0.7}
       >
-        <View style={styles.cardContent}>
-          {item.imagem_url ? (
-            <Image source={{ uri: item.imagem_url }} style={styles.thumbnail} />
-          ) : (
-            <View style={styles.itemIcon}>
-              <Text style={styles.itemIconText}>☁️</Text>
+        {item.imagem_url ? (
+          <Image source={{ uri: item.imagem_url }} style={[styles.thumb, { borderRadius: radius.md }]} />
+        ) : (
+          <View style={[styles.thumb, styles.thumbFallback, { backgroundColor: colors.infoSoft, borderRadius: radius.md }]}>
+            <Ionicons name="cloud" size={26} color={colors.info} />
+          </View>
+        )}
+        <View style={styles.cardInfo}>
+          <View style={styles.cardTopRow}>
+            <CloudBadge />
+            <Text style={[styles.cardDate, { color: colors.textMuted }]}>{item.criado_em ? formatarDataIso(item.criado_em) : ""}</Text>
+          </View>
+          {item.objeto_detectado && (
+            <Text style={[styles.cardObject, { color: colors.textPrimary }]} numberOfLines={1}>{item.objeto_detectado}</Text>
+          )}
+          {labels.length > 0 && (
+            <View style={styles.tagsRow}>
+              {labels.map((tag, i) => <TagChip key={i} tag={tag} />)}
             </View>
           )}
-          <View style={styles.cardInfo}>
-            <View style={styles.cardHeader}>
-              <Text style={[styles.cardStatus, styles.cloudBadge]}>Nuvem</Text>
-              <Text style={styles.cardDate}>{item.criado_em ? formatarDataIso(item.criado_em) : ""}</Text>
-            </View>
-            {item.objeto_detectado && (
-              <Text style={styles.cardObject}>{item.objeto_detectado}</Text>
-            )}
-            {labels.length > 0 && (
-              <View style={styles.tagsRow}>
-                {labels.map((tag, i) => (
-                  <Text key={i} style={styles.tag}>{tag}</Text>
-                ))}
-              </View>
-            )}
-          </View>
         </View>
-      </TouchableOpacity>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Card>
     );
   };
 
@@ -474,8 +637,8 @@ export default function HistoricoScreen() {
         return renderAnaliseNuvem({ item: item.item });
       case "cabecalhoNuvem":
         return (
-          <Text style={styles.cloudHeader}>
-            Analises da nuvem ({analisesNuvem?.length ?? 0})
+          <Text style={[styles.cloudHeader, { color: colors.textMuted }]}>
+            Análises da nuvem ({analisesNuvem?.length ?? 0})
           </Text>
         );
     }
@@ -498,48 +661,47 @@ export default function HistoricoScreen() {
     } catch {}
 
     return (
-      <TouchableOpacity
+      <Card
         style={styles.card}
+        contentStyle={styles.cardContent}
         onPress={() => router.push({ pathname: "/item/[id]", params: { id: item.id } } as any)}
         onLongPress={() => handleExcluirItem(item.id)}
-        activeOpacity={0.7}
       >
-        <View style={styles.cardContent}>
-          {item.imagem_uri ? (
-            <Image source={{ uri: item.imagem_uri }} style={styles.thumbnail} />
-          ) : (
-            <View style={styles.itemIcon}>
-              <Text style={styles.itemIconText}>{item.nome.charAt(0).toUpperCase()}</Text>
-            </View>
+        {item.imagem_uri ? (
+          <Image source={{ uri: item.imagem_uri }} style={[styles.thumb, { borderRadius: radius.md }]} />
+        ) : (
+          <View style={[styles.thumb, styles.thumbFallback, { backgroundColor: colors.surfaceMuted, borderRadius: radius.md }]}>
+            <Ionicons name="cube-outline" size={30} color={colors.textMuted} />
+          </View>
+        )}
+        <View style={styles.cardInfo}>
+          <View style={styles.cardTopRow}>
+            <LocalBadge />
+            <Text style={[styles.cardDate, { color: colors.textMuted }]}>{formatarData(item.criado_em)}</Text>
+          </View>
+          <Text style={[styles.cardObject, { color: colors.textPrimary }]} numberOfLines={1}>{item.nome}</Text>
+          {item.descricao && (
+            <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={1}>{item.descricao}</Text>
           )}
-          <View style={styles.cardInfo}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardCategory}>{item.categoria}</Text>
-              <Text style={styles.cardDate}>{formatarData(item.criado_em)}</Text>
-            </View>
-            <Text style={styles.cardObject}>{item.nome}</Text>
-            {item.descricao && (
-              <Text style={styles.cardDescription} numberOfLines={2}>{item.descricao}</Text>
-            )}
-            {tags.length > 0 && (
-              <View style={styles.tagsRow}>
-                {tags.slice(0, 3).map((tag, i) => (
-                  <Text key={i} style={styles.tag}>{tag}</Text>
-                ))}
-                {tags.length > 3 && <Text style={styles.tagMore}>+{tags.length - 3}</Text>}
-              </View>
-            )}
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardId}>Qtd: {item.quantidade}</Text>
-              {item.sincronizado === 0 ? (
-                <Text style={styles.syncPending}>Nao sincronizado</Text>
-              ) : (
-                <Text style={styles.syncOk}>Sincronizado</Text>
+          {(item.categoria || tags.length > 0) && (
+            <View style={styles.tagsRow}>
+              {item.categoria ? <CategoriaChip categoria={item.categoria} /> : null}
+              {tags.slice(0, 3).map((tag, i) => <TagChip key={i} tag={tag} />)}
+              {tags.length > 3 && (
+                <TagChip tag={`+${tags.length - 3}`} />
               )}
             </View>
+          )}
+          <View style={styles.cardFooter}>
+            <View style={styles.qtyRow}>
+              <Ionicons name="layers-outline" size={14} color={colors.textMuted} />
+              <Text style={[styles.cardId, { color: colors.textMuted }]}>Qtd: {item.quantidade}</Text>
+            </View>
+            <SyncChip sincronizado={item.sincronizado} />
           </View>
         </View>
-      </TouchableOpacity>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Card>
     );
   };
 
@@ -549,58 +711,50 @@ export default function HistoricoScreen() {
       : [];
 
     return (
-      <TouchableOpacity
+      <Card
         style={styles.card}
+        contentStyle={styles.cardContent}
         onPress={() => handleBaixarItemNuvem(item, true)}
         onLongPress={() => handleExcluirItemNuvem(item)}
-        activeOpacity={0.7}
       >
-        <View style={styles.cardContent}>
-          {item.imagem_url ? (
-            <Image source={{ uri: item.imagem_url }} style={styles.thumbnail} />
-          ) : (
-            <View style={styles.itemIcon}>
-              <Text style={styles.itemIconText}>☁️</Text>
+        {item.imagem_url ? (
+          <Image source={{ uri: item.imagem_url }} style={[styles.thumb, { borderRadius: radius.md }]} />
+        ) : (
+          <View style={[styles.thumb, styles.thumbFallback, { backgroundColor: colors.infoSoft, borderRadius: radius.md }]}>
+            <Ionicons name="cloud" size={26} color={colors.info} />
+          </View>
+        )}
+        <View style={styles.cardInfo}>
+          <View style={styles.cardTopRow}>
+            <CloudBadge />
+            <Text style={[styles.cardDate, { color: colors.textMuted }]}>
+              {item.atualizado_em ? formatarDataIso(item.atualizado_em) : ""}
+            </Text>
+          </View>
+          <Text style={[styles.cardObject, { color: colors.textPrimary }]} numberOfLines={1}>{item.nome}</Text>
+          {item.descricao && (
+            <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={1}>{item.descricao}</Text>
+          )}
+          {(item.categoria || tags.length > 0) && (
+            <View style={styles.tagsRow}>
+              {item.categoria ? <CategoriaChip categoria={item.categoria} /> : null}
+              {tags.map((tag, i) => <TagChip key={i} tag={tag} />)}
             </View>
           )}
-          <View style={styles.cardInfo}>
-            <View style={styles.cardHeader}>
-              <Text style={[styles.cardStatus, styles.cloudBadge]}>Nuvem</Text>
-              <Text style={styles.cardDate}>
-                {item.atualizado_em ? formatarDataIso(item.atualizado_em) : ""}
-              </Text>
+          <View style={styles.cardFooter}>
+            <View style={styles.qtyRow}>
+              <Ionicons name="layers-outline" size={14} color={colors.textMuted} />
+              <Text style={[styles.cardId, { color: colors.textMuted }]}>Qtd: {item.quantidade ?? 1}</Text>
             </View>
-            {item.categoria && (
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardCategory}>{item.categoria}</Text>
-              </View>
-            )}
-            <Text style={styles.cardObject}>{item.nome}</Text>
-            {item.descricao && (
-              <Text style={styles.cardDescription} numberOfLines={2}>{item.descricao}</Text>
-            )}
-            {tags.length > 0 && (
-              <View style={styles.tagsRow}>
-                {tags.map((tag, i) => (
-                  <Text key={i} style={styles.tag}>{tag}</Text>
-                ))}
-              </View>
-            )}
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardId}>Qtd: {item.quantidade ?? 1}</Text>
-              <TouchableOpacity
-                style={[styles.syncButton, baixandoItemId === item.id && styles.syncButtonDisabled]}
-                onPress={() => handleBaixarItemNuvem(item, false)}
-                disabled={baixandoItemId === item.id}
-              >
-                <Text style={styles.syncButtonText}>
-                  {baixandoItemId === item.id ? "Baixando..." : "Baixar"}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <BaixarButton
+              label={baixandoItemId === item.id ? "Baixando..." : "Baixar"}
+              busy={baixandoItemId === item.id}
+              onPress={() => handleBaixarItemNuvem(item, false)}
+            />
           </View>
         </View>
-      </TouchableOpacity>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Card>
     );
   };
 
@@ -611,148 +765,156 @@ export default function HistoricoScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#fff" />
-        <Text style={styles.loadingText}>Carregando...</Text>
-      </View>
+      <Screen style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Carregando...</Text>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.tabBar}>
+    <Screen>
+      <View style={[styles.tabBar, { backgroundColor: colors.surfaceMuted, borderRadius: radius.pill }]}>
         <TouchableOpacity
-          style={[styles.tab, tab === "analises" && styles.tabActive]}
+          style={styles.tab}
           onPress={() => mudarTab("analises")}
         >
-          <Text style={[styles.tabText, tab === "analises" && styles.tabTextActive]}>
-            Analises ({analises.length})
-          </Text>
+          {tab === "analises" ? (
+            <LinearGradient
+              colors={[colors.gradientStart, colors.gradientEnd]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.tabActive, { borderRadius: radius.pill }]}
+            >
+              <Text style={styles.tabTextActive}>Análises ({analises.length})</Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.tabInactive}>
+              <Text style={[styles.tabTextInactive, { color: colors.textSecondary }]}>Análises ({analises.length})</Text>
+            </View>
+          )}
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, tab === "itens" && styles.tabActive]}
+          style={styles.tab}
           onPress={() => mudarTab("itens")}
         >
-          <Text style={[styles.tabText, tab === "itens" && styles.tabTextActive]}>
-            Itens ({itens.length})
-          </Text>
+          {tab === "itens" ? (
+            <LinearGradient
+              colors={[colors.gradientStart, colors.gradientEnd]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.tabActive, { borderRadius: radius.pill }]}
+            >
+              <Text style={styles.tabTextActive}>Itens ({itens.length})</Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.tabInactive}>
+              <Text style={[styles.tabTextInactive, { color: colors.textSecondary }]}>Itens ({itens.length})</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
       {tab === "itens" && (
         <>
           <View style={styles.filterRow}>
-            <TouchableOpacity
-              style={[styles.filterPill, filtroItens === "todos" && styles.filterPillActive]}
-              onPress={() => setFiltroItens("todos")}
-            >
-              <Text style={[styles.filterPillText, filtroItens === "todos" && styles.filterPillTextActive]}>Todos</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterPill, filtroItens === "locais" && styles.filterPillActive]}
-              onPress={() => setFiltroItens("locais")}
-            >
-              <Text style={[styles.filterPillText, filtroItens === "locais" && styles.filterPillTextActive]}>Locais</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterPill, filtroItens === "nuvem" && styles.filterPillActive]}
+            <FilterChip label="Todos" active={filtroItens === "todos"} onPress={() => setFiltroItens("todos")} />
+            <FilterChip label="Locais" active={filtroItens === "locais"} onPress={() => setFiltroItens("locais")} />
+            <FilterChip
+              label={carregandoItensNuvem ? "Carregando..." : "Nuvem"}
+              active={filtroItens === "nuvem"}
               onPress={handleSelecionarNuvem}
-            >
-              <Text style={[styles.filterPillText, filtroItens === "nuvem" && styles.filterPillTextActive]}>
-                {carregandoItensNuvem ? "Carregando..." : "Nuvem"}
-              </Text>
-            </TouchableOpacity>
+            />
           </View>
           {opcoesCategorias.length > 0 && (
-            <View style={styles.filtroSection}>
-              <Text style={styles.filtroLabel}>Categoria</Text>
+            <View style={styles.filtroSectionBox}>
+              <Text style={[styles.filtroLabel, { color: colors.textMuted }]}>Categoria</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtroChips}>
                 {opcoesCategorias.map((categoria) => (
-                  <TouchableOpacity
+                  <FiltroChip
                     key={categoria}
-                    style={[styles.filtroChip, categoriasFiltro.includes(categoria) && styles.filtroChipActive]}
+                    label={categoria}
+                    active={categoriasFiltro.includes(categoria)}
                     onPress={() => toggleCategoria(categoria)}
-                  >
-                    <Text style={[styles.filtroChipText, categoriasFiltro.includes(categoria) && styles.filtroChipTextActive]}>
-                      {categoria}
-                    </Text>
-                  </TouchableOpacity>
+                  />
                 ))}
               </ScrollView>
             </View>
           )}
           {opcoesTags.length > 0 && (
-            <View style={styles.filtroSection}>
-              <Text style={styles.filtroLabel}>Tags</Text>
+            <View style={styles.filtroSectionBox}>
+              <Text style={[styles.filtroLabel, { color: colors.textMuted }]}>Tags</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtroChips}>
                 {opcoesTags.map((tag) => (
-                  <TouchableOpacity
+                  <FiltroChip
                     key={tag}
-                    style={[styles.filtroChip, tagsFiltro.includes(tag) && styles.filtroChipActive]}
+                    label={tag}
+                    active={tagsFiltro.includes(tag)}
                     onPress={() => toggleTag(tag)}
-                  >
-                    <Text style={[styles.filtroChipText, tagsFiltro.includes(tag) && styles.filtroChipTextActive]}>
-                      {tag}
-                    </Text>
-                  </TouchableOpacity>
+                  />
                 ))}
               </ScrollView>
             </View>
           )}
           {filtroAtivo && (
             <View style={styles.filtroBar}>
-              <Text style={styles.filtroCount}>
+              <Text style={[styles.filtroCount, { color: colors.textSecondary }]}>
                 {linhasFiltradas.length} de {linhasItens.length} itens
               </Text>
-              <TouchableOpacity onPress={limparFiltros}>
-                <Text style={styles.filtroClear}>Limpar</Text>
+              <TouchableOpacity onPress={limparFiltros} activeOpacity={0.8}>
+                <View style={[styles.filtroClearPill, { backgroundColor: colors.dangerSoft }]}>
+                  <Ionicons name="close" size={13} color={colors.danger} />
+                  <Text style={[styles.filtroClear, { color: colors.danger }]}>Limpar</Text>
+                </View>
               </TouchableOpacity>
             </View>
           )}
           <View style={styles.syncBar}>
-            <TouchableOpacity
-              style={[styles.syncButton, (!isConnected || syncing) && styles.syncButtonDisabled]}
+            <PrimaryButton
+              title={syncing ? "Enviando..." : "Sincronizar"}
               onPress={handleSincronizar}
               disabled={!isConnected || syncing}
-            >
-              <Text style={styles.syncButtonText}>{syncing ? "Enviando..." : "Sincronizar"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.syncButton, styles.downloadButton, (!isConnected || downloading) && styles.syncButtonDisabled]}
+              icon="sync"
+              style={styles.syncBtn}
+            />
+            <GhostButton
+              title={downloading ? "Baixando..." : "Baixar todos"}
               onPress={handleBaixarRemotos}
               disabled={!isConnected || downloading}
-            >
-              <Text style={styles.syncButtonText}>{downloading ? "Baixando..." : "Baixar todos"}</Text>
-            </TouchableOpacity>
+              icon="download-outline"
+              style={styles.syncBtn}
+            />
           </View>
         </>
       )}
 
       {tab === "analises" && (
         <View style={styles.syncBar}>
-          <TouchableOpacity
-            style={[styles.syncButton, (!isConnected || carregandoNuvem) && styles.syncButtonDisabled]}
+          <PrimaryButton
+            title={carregandoNuvem ? "Carregando..." : "Análises da nuvem"}
             onPress={handleCarregarNuvem}
             disabled={!isConnected || carregandoNuvem}
-          >
-            <Text style={styles.syncButtonText}>
-              {carregandoNuvem ? "Carregando..." : "Analises da nuvem"}
-            </Text>
-          </TouchableOpacity>
+            icon="cloud-download-outline"
+            style={styles.syncBtnFull}
+          />
         </View>
       )}
 
       {!isConnected && (
-        <View style={styles.offlineBar}>
-          <Text style={styles.offlineText}>Offline</Text>
+        <View style={[styles.offlineBar, { backgroundColor: colors.warningSoft, borderRadius: radius.md }]}>
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
+          <Text style={[styles.offlineText, { color: colors.warning }]}>Offline</Text>
         </View>
       )}
 
       {tab === "analises" ? (
         analises.length === 0 && (!analisesNuvem || analisesNuvem.length === 0) ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Nenhuma analise registrada</Text>
-            <Text style={styles.emptySubtext}>Tire uma foto para comecar</Text>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceMuted }]}>
+              <Ionicons name="document-text-outline" size={34} color={colors.textMuted} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Nenhuma análise registrada</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>Tire uma foto para começar</Text>
           </View>
         ) : (
           <FlatList
@@ -765,30 +927,35 @@ export default function HistoricoScreen() {
                   : `analise-${linha.item.id}`
             }
             renderItem={renderLinhaAnalise}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
             contentContainerStyle={styles.listContent}
           />
         )
       ) : (
         linhasFiltradas.length === 0 ? (
           <View style={styles.emptyContainer}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceMuted }]}>
+              <Ionicons name={filtroAtivo ? "funnel-outline" : "cube-outline"} size={34} color={colors.textMuted} />
+            </View>
             {filtroAtivo ? (
               <>
-                <Text style={styles.emptyText}>Nenhum item corresponde ao filtro</Text>
-                <TouchableOpacity style={styles.clearFiltersButton} onPress={limparFiltros}>
-                  <Text style={styles.clearFiltersButtonText}>Limpar filtros</Text>
+                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Nenhum item corresponde ao filtro</Text>
+                <TouchableOpacity
+                  style={[styles.clearFiltersButton, { backgroundColor: colors.dangerSoft, borderRadius: radius.pill }]}
+                  onPress={limparFiltros}
+                >
+                  <Text style={[styles.clearFiltersButtonText, { color: colors.danger }]}>Limpar filtros</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
-                <Text style={styles.emptyText}>
+                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
                   {filtroItens === "nuvem"
                     ? "Nenhum item na nuvem"
                     : filtroItens === "locais"
                       ? "Nenhum item local"
                       : "Nenhum item salvo"}
                 </Text>
-                <Text style={styles.emptySubtext}>
+                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                   {filtroItens === "nuvem" && erroItensNuvem
                     ? erroItensNuvem
                     : filtroItens === "nuvem"
@@ -796,7 +963,7 @@ export default function HistoricoScreen() {
                         ? "Carregando..."
                         : "Nenhum item na nuvem"
                       : filtroItens === "locais"
-                        ? "Salve um item a partir de uma analise"
+                        ? "Salve um item a partir de uma análise"
                         : "Tire uma foto ou baixe itens da nuvem"}
                 </Text>
               </>
@@ -807,351 +974,363 @@ export default function HistoricoScreen() {
             data={linhasFiltradas}
             keyExtractor={(linha) => `${linha.tipo}-${linha.item.id}`}
             renderItem={renderLinhaItem}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
             contentContainerStyle={styles.listContent}
           />
         )
       )}
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  loadingContainer: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
-    paddingTop: 50,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZES.body,
+    marginTop: spacing.md,
   },
   tabBar: {
     flexDirection: "row",
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 8,
+    gap: 4,
+    padding: 4,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: "#e0e0e0",
-    alignItems: "center",
   },
   tabActive: {
-    backgroundColor: "#333",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.sm,
   },
-  tabText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#666",
+  tabInactive: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.sm,
   },
   tabTextActive: {
-    color: "#fff",
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.body,
+    color: "#FFFFFF",
   },
-  syncBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  syncBarLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  filterLabel: {
-    fontSize: 13,
-    color: "#666",
-  },
-  syncBarRight: {
-    flexDirection: "row",
-    gap: 8,
+  tabTextInactive: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.body,
   },
   filterRow: {
     flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
-  filterPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: "#e0e0e0",
+  filterChipGradient: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
   },
-  filterPillActive: {
-    backgroundColor: "#2196f3",
+  filterChipTextActive: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.body,
+    color: "#FFFFFF",
   },
-  filterPillText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#444",
+  filterChipIdle: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  filterPillTextActive: {
-    color: "#fff",
+  filterChipTextIdle: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.body,
   },
-  filtroSection: {
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  filtroLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
-    marginBottom: 6,
-    textTransform: "uppercase",
-  },
-  filtroChips: {
-    paddingRight: 4,
-  },
-  filtroChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-    backgroundColor: "#e0e0e0",
-    marginRight: 8,
-  },
-  filtroChipActive: {
-    backgroundColor: "#2196f3",
-  },
-  filtroChipText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#444",
+  filtroChipGradient: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
   },
   filtroChipTextActive: {
-    color: "#fff",
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
+    color: "#FFFFFF",
+  },
+  filtroChipIdle: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  filtroChipTextIdle: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZES.caption,
+  },
+  filtroSectionBox: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  filtroLabel: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
+    textTransform: "uppercase",
+    marginBottom: spacing.xs,
+    paddingHorizontal: 2,
+  },
+  filtroChips: {
+    paddingRight: spacing.xs,
+    gap: spacing.sm,
   },
   filtroBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
   },
   filtroCount: {
-    fontSize: 12,
-    color: "#666",
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZES.caption,
+  },
+  filtroClearPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
   },
   filtroClear: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#f44336",
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
   },
   clearFiltersButton: {
-    marginTop: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: "#f44336",
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
   },
   clearFiltersButtonText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "600",
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.body,
   },
-  syncButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#2196f3",
-    borderRadius: 6,
+  syncBar: {
+    flexDirection: "row",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
-  downloadButton: {
-    backgroundColor: "#4caf50",
+  syncBtn: {
+    flex: 1,
   },
-  syncButtonDisabled: {
-    backgroundColor: "#bbb",
-  },
-  syncButtonText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "600",
+  syncBtnFull: {
+    flex: 1,
   },
   offlineBar: {
-    backgroundColor: "#ff9800",
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    marginHorizontal: 16,
-    borderRadius: 6,
+    flexDirection: "row",
     alignItems: "center",
+    alignSelf: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
   },
   offlineText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    color: "#fff",
-    marginTop: 16,
-    fontSize: 16,
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.body,
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 20,
+    justifyContent: "center",
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: spacing.xxxl,
   },
-  emptyText: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
   },
-  emptySubtext: {
-    fontSize: 16,
-    color: "#999",
+  emptyTitle: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.bodyLarge,
+    textAlign: "center",
+    marginBottom: spacing.xs,
+  },
+  emptySubtitle: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZES.body,
+    textAlign: "center",
   },
   listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxxl,
+    gap: spacing.md,
   },
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    overflow: "hidden",
+    padding: spacing.md,
   },
   cardContent: {
     flexDirection: "row",
-    padding: 12,
-  },
-  thumbnail: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    backgroundColor: "#eee",
-  },
-  itemIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    backgroundColor: "#e3f2fd",
-    justifyContent: "center",
     alignItems: "center",
   },
-  itemIconText: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#2196f3",
+  thumb: {
+    width: 64,
+    height: 64,
+  },
+  thumbFallback: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   cardInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: spacing.md,
     justifyContent: "center",
   },
-  cardHeader: {
+  cardTopRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    marginBottom: 2,
   },
-  cardStatus: {
-    fontSize: 12,
-    fontWeight: "600",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: "rgba(0,0,0,0.1)",
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
   },
-  cardCategory: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#2196f3",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: "#e3f2fd",
+  badgeText: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
   },
-  cloudBadge: {
-    color: "#fff",
-    backgroundColor: "#9c27b0",
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    maxWidth: "70%",
   },
-  cloudHeader: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 4,
-    marginTop: 8,
+  categoryChipText: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
   },
-  cardDate: {
-    fontSize: 12,
-    color: "#999",
+  cloudChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  cloudChipText: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
+  },
+  localChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  localChipText: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
+  },
+  syncChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  syncChipText: {
+    fontFamily: FONT.medium,
+    fontSize: 11,
   },
   cardObject: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 4,
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.body,
+    marginTop: 2,
   },
-  cardDescription: {
-    fontSize: 13,
-    color: "#666",
-    marginBottom: 4,
+  cardDate: {
+    fontFamily: FONT.regular,
+    fontSize: 11,
+  },
+  cardDesc: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZES.caption,
+    marginTop: 1,
   },
   cardFooter: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 4,
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   cardId: {
+    fontFamily: FONT.regular,
     fontSize: 11,
-    color: "#999",
-    fontFamily: "monospace",
   },
-  syncPending: {
-    fontSize: 11,
-    color: "#ff9800",
-    fontWeight: "600",
-  },
-  syncOk: {
-    fontSize: 11,
-    color: "#4caf50",
-    fontWeight: "600",
+  qtyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   tagsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: 4,
     gap: 4,
+    marginTop: spacing.xs,
   },
   tag: {
-    fontSize: 11,
-    color: "#666",
-    backgroundColor: "#f0f0f0",
-    paddingHorizontal: 6,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderRadius: 4,
+    maxWidth: 110,
   },
-  tagMore: {
+  tagText: {
+    fontFamily: FONT.medium,
     fontSize: 11,
-    color: "#999",
-    paddingHorizontal: 4,
-    paddingVertical: 2,
   },
-  analyzeButton: {
-    marginTop: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#2196f3",
-    borderRadius: 6,
+  downloadChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  downloadChipText: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
+    color: "#FFFFFF",
+  },
+  cta: {
+    marginTop: spacing.sm,
     alignSelf: "flex-start",
   },
-  analyzeButtonText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "600",
+  ctaGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
   },
-  separator: {
-    height: 12,
+  ctaText: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
+    color: "#FFFFFF",
+  },
+  cloudHeader: {
+    fontFamily: FONT.extrabold,
+    fontSize: FONT_SIZES.body,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
   },
 });

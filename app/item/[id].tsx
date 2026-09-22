@@ -9,7 +9,10 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  useWindowDimensions,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import {
   obterItemPorId,
@@ -23,8 +26,11 @@ import {
   obterAnaliseRemota,
   excluirItemEmTodoLugar,
 } from "../../src/services/sync";
+import { Card, Screen, PrimaryButton } from "../../src/components";
+import { useTheme, FONT, FONT_SIZES, spacing, radius } from "../../src/theme";
 
 export default function ItemScreen() {
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [item, setItem] = useState<ItemInventario | null>(null);
   const [nome, setNome] = useState("");
@@ -35,7 +41,8 @@ export default function ItemScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [imagemAspect, setImagemAspect] = useState<number | null>(null);
+  const [imagemSize, setImagemSize] = useState<{ width: number; height: number } | null>(null);
+  const { width: screenWidth } = useWindowDimensions();
 
   const carregar = useCallback(() => {
     const dados = obterItemPorId(id);
@@ -58,14 +65,20 @@ export default function ItemScreen() {
 
   useEffect(() => {
     if (!item?.imagem_uri) return;
+    setImagemSize(null);
     Image.getSize(
       item.imagem_uri,
       (w, h) => {
-        if (w > 0 && h > 0) setImagemAspect(w / h);
+        if (w > 0 && h > 0) {
+          const maxW = screenWidth - spacing.lg * 2;
+          const maxH = 400;
+          const scale = Math.min(maxW / w, maxH / h);
+          setImagemSize({ width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) });
+        }
       },
       () => {}
     );
-  }, [item?.imagem_uri]);
+  }, [item?.imagem_uri, screenWidth]);
 
   const handleSalvar = () => {
     if (!categoria.trim()) {
@@ -179,231 +192,336 @@ export default function ItemScreen() {
     });
   };
 
+  const synced = item?.sincronizado === 1;
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#333" />
-        <Text style={styles.loadingText}>Carregando item...</Text>
-      </View>
+      <Screen style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Carregando item...</Text>
+      </Screen>
     );
   }
 
   if (!item) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Item não encontrado.</Text>
-      </View>
+      <Screen style={styles.loadingContainer}>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Item não encontrado.</Text>
+      </Screen>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      {item.imagem_uri ? (
-        <Image
-          source={{ uri: item.imagem_uri }}
-          style={[styles.image, imagemAspect ? { aspectRatio: imagemAspect } : null]}
-          resizeMode="contain"
-        />
-      ) : (
-        <View style={styles.imagePlaceholder}>
-          <Text style={styles.imagePlaceholderText}>{item.nome.charAt(0).toUpperCase()}</Text>
+    <Screen>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.imageWrap}>
+          {item.imagem_uri ? (
+            imagemSize ? (
+              <Image
+                source={{ uri: item.imagem_uri }}
+                style={[styles.image, { width: imagemSize.width, height: imagemSize.height, borderRadius: radius.md }]}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.imageLoading, { backgroundColor: colors.surfaceMuted, borderRadius: radius.xl }]} />
+            )
+          ) : (
+            <LinearGradient
+              colors={[colors.gradientStart, colors.gradientEnd]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.imagePlaceholder, { borderRadius: radius.xl }]}
+            >
+              <Text style={styles.imagePlaceholderText}>{item.nome.charAt(0).toUpperCase()}</Text>
+            </LinearGradient>
+          )}
         </View>
-      )}
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Nome</Text>
-        <TextInput
-          style={styles.input}
-          value={nome}
-          onChangeText={setNome}
-          placeholder="Ex: Cadeira, Furadeira, Notebook"
+        <View style={styles.chipsRow}>
+          <View style={[styles.chip, { backgroundColor: colors.surfaceMuted }]}>
+            <Ionicons name="phone-portrait" size={13} color={colors.primary} />
+            <Text style={[styles.chipText, { color: colors.primary }]}>Local</Text>
+          </View>
+          {item.categoria ? (
+            <View style={[styles.chip, { backgroundColor: colors.infoSoft }]}>
+              <Ionicons name="pricetag" size={13} color={colors.info} />
+              <Text style={[styles.chipText, { color: colors.info }]} numberOfLines={1}>{item.categoria}</Text>
+            </View>
+          ) : null}
+          <View style={[styles.chip, { backgroundColor: synced ? colors.successSoft : colors.warningSoft }]}>
+            <Ionicons
+              name={synced ? "cloud-done-outline" : "cloud-upload-outline"}
+              size={13}
+              color={synced ? colors.success : colors.warning}
+            />
+            <Text style={[styles.chipText, { color: synced ? colors.success : colors.warning }]}>
+              {synced ? "Sincronizado" : "Não sincronizado"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: colors.textMuted }]}>NOME</Text>
+          <TextInput
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.textPrimary }]}
+            value={nome}
+            onChangeText={setNome}
+            placeholder="Ex: Cadeira, Furadeira, Notebook"
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: colors.textMuted }]}>CATEGORIA <Text style={[styles.required, { color: colors.danger }]}>*</Text></Text>
+          <TextInput
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.textPrimary }]}
+            value={categoria}
+            onChangeText={setCategoria}
+            placeholder="Ex: Móveis, Ferramentas, Eletrônicos"
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: colors.textMuted }]}>TAGS</Text>
+          <TextInput
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.textPrimary }]}
+            value={tags}
+            onChangeText={setTags}
+            placeholder="Ex: furniture, wood, chair"
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: colors.textMuted }]}>DESCRIÇÃO (OPCIONAL)</Text>
+          <TextInput
+            style={[styles.input, styles.inputMultiline, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.textPrimary }]}
+            value={descricao}
+            onChangeText={setDescricao}
+            placeholder="Detalhes, número de série, observações..."
+            placeholderTextColor={colors.textMuted}
+            multiline
+            numberOfLines={3}
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: colors.textMuted }]}>QUANTIDADE</Text>
+          <TextInput
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surface, color: colors.textPrimary }]}
+            value={quantidade}
+            onChangeText={setQuantidade}
+            keyboardType="numeric"
+            placeholder="1"
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+
+        <PrimaryButton
+          title={saving ? "Salvando..." : "Salvar alterações"}
+          icon="checkmark"
+          onPress={handleSalvar}
+          disabled={saving}
+          style={styles.saveBtn}
         />
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Categoria <Text style={styles.required}>*</Text></Text>
-        <TextInput
-          style={styles.input}
-          value={categoria}
-          onChangeText={setCategoria}
-          placeholder="Ex: Móveis, Ferramentas, Eletrônicos"
-        />
-      </View>
+        {item.analise_origem_id && (
+          <Card
+            style={styles.analysisCard}
+            contentStyle={styles.analysisCardContent}
+            onPress={handleVerAnalise}
+          >
+            <View style={[styles.analysisIcon, { backgroundColor: colors.surfaceMuted, borderRadius: radius.md }]}>
+              <Ionicons name="document-text-outline" size={22} color={colors.primary} />
+            </View>
+            <View style={styles.analysisTextWrap}>
+              <Text style={[styles.analysisTitle, { color: colors.textPrimary }]}>Análise de origem</Text>
+              <Text style={[styles.analysisSubtitle, { color: colors.textSecondary }]}>Ver objeto detectado e rótulos da análise original</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Card>
+        )}
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Tags</Text>
-        <TextInput
-          style={styles.input}
-          value={tags}
-          onChangeText={setTags}
-          placeholder="Ex: furniture, wood, chair"
-        />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>Descrição (opcional)</Text>
-        <TextInput
-          style={[styles.input, styles.inputMultiline]}
-          value={descricao}
-          onChangeText={setDescricao}
-          placeholder="Detalhes, número de série, observações..."
-          multiline
-          numberOfLines={3}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>Quantidade</Text>
-        <TextInput
-          style={styles.input}
-          value={quantidade}
-          onChangeText={setQuantidade}
-          keyboardType="numeric"
-          placeholder="1"
-        />
-      </View>
-
-      <TouchableOpacity style={styles.saveButton} onPress={handleSalvar} disabled={saving} activeOpacity={0.7}>
-        <Text style={styles.saveButtonText}>{saving ? "Salvando..." : "Salvar alterações"}</Text>
-      </TouchableOpacity>
-
-      {item.analise_origem_id && (
-        <TouchableOpacity style={styles.analysisLink} onPress={handleVerAnalise} activeOpacity={0.7}>
-          <Text style={styles.analysisLinkText}>Ver análise de origem</Text>
+        <TouchableOpacity
+          style={[styles.deleteButton, { borderColor: colors.danger }]}
+          onPress={handleExcluir}
+          disabled={deleting}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+          <Text style={[styles.deleteButtonText, { color: colors.danger }]}>
+            {deleting ? "Excluindo..." : "Excluir item"}
+          </Text>
         </TouchableOpacity>
-      )}
 
-      <TouchableOpacity style={styles.deleteButton} onPress={handleExcluir} disabled={deleting} activeOpacity={0.7}>
-        <Text style={styles.deleteButtonText}>{deleting ? "Excluindo..." : "Excluir item"}</Text>
-      </TouchableOpacity>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Criado: {formatarData(item.criado_em)}</Text>
-        <Text style={styles.footerText}>Atualizado: {formatarData(item.atualizado_em)}</Text>
-        <Text style={styles.footerText}>
-          {item.sincronizado === 1 ? "Sincronizado" : "Nao sincronizado"}
-        </Text>
-        <Text style={styles.footerId}>ID: {item.id}</Text>
-      </View>
-    </ScrollView>
+        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+          <View style={styles.footerRow}>
+            <Text style={[styles.footerLabel, { color: colors.textMuted }]}>Criado em</Text>
+            <Text style={[styles.footerValue, { color: colors.textSecondary }]}>{formatarData(item.criado_em)}</Text>
+          </View>
+          <View style={styles.footerRow}>
+            <Text style={[styles.footerLabel, { color: colors.textMuted }]}>Atualizado em</Text>
+            <Text style={[styles.footerValue, { color: colors.textSecondary }]}>{formatarData(item.atualizado_em)}</Text>
+          </View>
+          <View style={styles.footerRow}>
+            <Text style={[styles.footerLabel, { color: colors.textMuted }]}>Status</Text>
+            <Text style={[styles.footerValue, { color: synced ? colors.success : colors.warning }]}>
+              {synced ? "Sincronizado" : "Não sincronizado"}
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    justifyContent: "center",
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#666",
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZES.body,
+    marginTop: spacing.md,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxxl,
+  },
+  imageWrap: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+    minHeight: 120,
   },
   image: {
+    backgroundColor: "transparent",
+  },
+  imageLoading: {
     width: "100%",
-    aspectRatio: 1,
-    maxHeight: 400,
-    borderRadius: 12,
-    marginBottom: 20,
-    backgroundColor: "#f0f0f0",
+    aspectRatio: 2,
   },
   imagePlaceholder: {
     width: "100%",
-    aspectRatio: 1,
-    maxHeight: 400,
-    borderRadius: 12,
-    marginBottom: 20,
-    backgroundColor: "#e3f2fd",
-    justifyContent: "center",
+    aspectRatio: 16 / 10,
     alignItems: "center",
+    justifyContent: "center",
   },
   imagePlaceholderText: {
+    fontFamily: FONT.extrabold,
     fontSize: 64,
-    fontWeight: "700",
-    color: "#2196f3",
+    color: "#FFFFFF",
+  },
+  chipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    maxWidth: "70%",
+  },
+  chipText: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
+    flexShrink: 1,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   label: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.caption,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: spacing.xs,
+    paddingHorizontal: 2,
   },
   required: {
-    color: "#f44336",
+    fontFamily: FONT.bold,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 14,
-    fontSize: 16,
-    backgroundColor: "#fafafa",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZES.body,
   },
   inputMultiline: {
     minHeight: 100,
     textAlignVertical: "top",
   },
-  saveButton: {
-    backgroundColor: "#2196f3",
-    paddingVertical: 16,
-    borderRadius: 8,
+  saveBtn: {
+    marginTop: spacing.sm,
+  },
+  analysisCard: {
+    marginTop: spacing.md,
+  },
+  analysisCardContent: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 8,
+    padding: spacing.md,
   },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  analysisLink: {
-    paddingVertical: 12,
+  analysisIcon: {
+    width: 44,
+    height: 44,
     alignItems: "center",
-    marginTop: 8,
+    justifyContent: "center",
   },
-  analysisLinkText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#2196f3",
+  analysisTextWrap: {
+    flex: 1,
+    marginHorizontal: spacing.md,
+  },
+  analysisTitle: {
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.body,
+  },
+  analysisSubtitle: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZES.caption,
+    marginTop: 1,
   },
   deleteButton: {
-    paddingVertical: 14,
-    borderRadius: 8,
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: "#f44336",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: spacing.lg,
   },
   deleteButtonText: {
-    color: "#f44336",
-    fontSize: 16,
-    fontWeight: "600",
+    fontFamily: FONT.semibold,
+    fontSize: FONT_SIZES.body,
   },
   footer: {
-    marginTop: 24,
+    marginTop: spacing.xxl,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  footerRow: {
+    flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    justifyContent: "space-between",
   },
-  footerText: {
-    fontSize: 13,
-    color: "#999",
+  footerLabel: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZES.caption,
   },
-  footerId: {
-    fontSize: 11,
-    color: "#bbb",
-    fontFamily: "monospace",
-    marginTop: 4,
+  footerValue: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZES.body,
   },
 });

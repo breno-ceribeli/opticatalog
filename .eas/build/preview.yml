@@ -1,0 +1,12 @@
+build:
+  name: Opticatalog Preview (APK)
+  steps:
+    - eas/checkout
+    - run:
+        name: Install dependencies
+        command: npm install
+    - eas/resolve_build_config
+    - eas/prebuild
+    - eas/inject_android_credentials
+    - eas/run_gradle
+    - eas/find_and_upload_build_artifacts

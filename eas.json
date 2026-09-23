@@ -5,6 +5,7 @@
   },
   "build": {
     "preview": {
+      "config": "preview.yml",
       "android": {
         "buildType": "apk",
         "distribution": "internal"

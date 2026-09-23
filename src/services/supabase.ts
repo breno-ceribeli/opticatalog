@@ -13,7 +13,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error("[Supabase] URL ou anon key não configurados no .env");
 }
 
-export const supabase = createClient(supabaseUrl!, supabaseAnonKey!, {
+export const supabase = createClient(supabaseUrl || "https://supabase.invalid", supabaseAnonKey || "missing-anon-key", {
   auth: {
     storage: AsyncStorage,
     detectSessionInUrl: false,

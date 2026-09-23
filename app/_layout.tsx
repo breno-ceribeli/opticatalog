@@ -12,6 +12,7 @@ import NetInfo from "@react-native-community/netinfo";
 import { iniciarBanco } from "../src/db/schema";
 import { sincronizarTudo } from "../src/services/sync";
 import { ThemeProvider, useTheme, FONT } from "../src/theme";
+import { ErrorBoundary } from "../src/components/ErrorBoundary";
 
 function AppNavigator() {
   const { colors } = useTheme();
@@ -35,7 +36,7 @@ function AppNavigator() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -45,7 +46,11 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    iniciarBanco();
+    try {
+      iniciarBanco();
+    } catch (e) {
+      console.error("[DB] Erro ao inicializar banco:", e);
+    }
 
     // Sync inicial ao abrir o app
     NetInfo.fetch().then((state) => {
@@ -72,5 +77,13 @@ export default function RootLayout() {
     <ThemeProvider>
       <AppNavigator />
     </ThemeProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <RootLayout />
+    </ErrorBoundary>
   );
 }

@@ -5,12 +5,14 @@
   },
   "build": {
     "preview": {
+      "installCommand": "npm install",
       "android": {
         "buildType": "apk",
         "distribution": "internal"
       }
     },
     "production": {
+      "installCommand": "npm install",
       "android": {
         "buildType": "app-bundle"
       }

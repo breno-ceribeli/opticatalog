@@ -126,17 +126,6 @@ const iconPng = gradientBuffer();
 drawRing(iconPng, SIZE / 2, SIZE / 2, 235, 130, white);
 fs.writeFileSync(path.join(outDir, "icon.png"), encodePng(iconPng));
 
-const bgPng = gradientBuffer();
-fs.writeFileSync(path.join(outDir, "android-icon-background.png"), encodePng(bgPng));
-
-const fgPng = transparentBuffer();
-drawRing(fgPng, SIZE / 2, SIZE / 2, 200, 115, white);
-fs.writeFileSync(path.join(outDir, "android-icon-foreground.png"), encodePng(fgPng));
-
-const monoPng = transparentBuffer();
-drawRing(monoPng, SIZE / 2, SIZE / 2, 200, 115, white);
-fs.writeFileSync(path.join(outDir, "android-icon-monochrome.png"), encodePng(monoPng));
-
 const splashPng = transparentBuffer();
 drawRing(splashPng, SIZE / 2, SIZE / 2, 235, 130, gradientRingColor);
 fs.writeFileSync(path.join(outDir, "splash-icon.png"), encodePng(splashPng));

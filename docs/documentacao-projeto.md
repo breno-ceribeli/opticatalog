@@ -19,12 +19,12 @@ O usuário aponta a câmera para um objeto, o app identifica o que é (nome + ta
 
 1. **Captura e detecção de objeto** — foto tirada pelo usuário é enviada para análise; o app identifica o objeto (ex: "Cadeira", "Furadeira") e retorna tags relacionadas (ex: "Furniture", "Wood").
 2. **OCR complementar (botão separado, opcional)** — lê texto visível no item e adiciona como campo "Descrição", ajudando a diferenciar fisicamente itens do mesmo tipo (ex: dois itens "Notebook", um com número de série lido, outro sem).
-3. **Checagem de duplicado baseada em evidência real** — só considera um item como "o mesmo já cadastrado" quando o texto lido via OCR bate com um item existente. Sem essa evidência, o sistema não tenta adivinhar.
-4. **Contagem por categoria** — estatística simples via consulta agregada no banco (quantos itens existem por categoria/nome), sem tentativa de reconhecimento de duplicado por imagem.
+3. **Checagem de duplicados por OCR (planejada)** — usar o texto lido para comparar registros. No fluxo atual, o OCR auxilia o preenchimento da descrição.
+4. **Filtros por categoria e tags** — o inventário pode ser filtrado pelos dados do cadastro.
 5. **Edição manual** — nome e tags sugeridos pela IA são um ponto de partida editável; a categoria é sempre definida manualmente pelo usuário (sem sugestão automática) antes de confirmar o lançamento no inventário.
 6. **Histórico de análises** — toda captura fica registrada, mesmo repetidas.
-7. **Inventário consolidado** — lista de itens únicos com quantidade, categoria e descrição.
-8. **Offline-first para armazenamento** — captura e salvamento local sempre funcionam, mesmo sem internet. A etapa de análise (que depende da API na nuvem) fica marcada como "pendente" e é processada automaticamente quando a conexão volta, sincronizando em seguida com o Supabase.
+7. **Inventário** — lista de itens cadastrados com quantidade, categoria e descrição.
+8. **Armazenamento local com operação offline** — fotos confirmadas sem conexão ficam com a análise pendente. Após reconectar, o app dispara a sincronização de registros. A análise da imagem pendente pode ser acionada pelo histórico.
 
 ---
 
@@ -37,12 +37,11 @@ Tirar foto
       → [com internet] Enviar para Cloud Vision (objeto + tags)
          → Usuário revisa/edita nome e tags, define a categoria manualmente
          → (opcional) Botão "Ler texto" → OCR via Cloud Vision → preenche Descrição
-         → Se texto bateu com item existente → atualiza item (não duplica)
-         → Se não → cria novo item no inventário
+         → Usuário confirma os dados revisados e salva o item no inventário
       → Sincroniza com Supabase
 ```
 
-**Importante:** a análise (Cloud Vision) sempre depende de internet — não há OCR nem detecção de objeto offline nesta versão. O que é offline-first é a captura e o armazenamento: o app nunca trava ou perde dados por falta de conexão, apenas adia o processamento.
+**Importante:** a análise e o OCR dependem de internet. A captura e o armazenamento funcionam localmente quando não há conexão.
 
 ---
 
@@ -65,7 +64,7 @@ Tirar foto
 
 ## 5. Banco de dados
 
-**Princípio importante:** o `id` de cada registro é gerado **no próprio app** (client-side, via `crypto.randomUUID()`), não pelo banco. É o mesmo ID usado tanto no SQLite quanto no Supabase — assim a sincronização é um upsert direto por `id`, sem precisar "traduzir" IDs locais para remotos.
+**Princípio importante:** o `id` de cada registro é gerado no app e reaproveitado no SQLite e no Supabase. A sincronização usa esse identificador para fazer upsert do mesmo registro.
 
 **Lógica geral:** `analises` guarda o que a API devolveu bruto para aquela captura (objeto, labels/tags, e o texto do OCR se foi usado); `itens_inventario` guarda a versão consolidada e editável, copiada de `analises` no momento da confirmação, podendo divergir depois conforme o usuário edita.
 
@@ -94,7 +93,7 @@ Tirar foto
 - `categoria` (campo manual — o usuário define/digita na confirmação; sem sugestão automática)
 - `tags_json` (TEXT — JSON serializado, copiado de `labels_json`; usuário pode adicionar/remover tags)
 - `descricao` (texto editável pelo usuário; copiado de `texto_ocr` como valor inicial, mas o usuário pode reescrever livremente)
-- `identificador_ocr` (nullable — cópia **fixa, não editável** do texto bruto do OCR, usada só internamente para checagem de duplicado; diferente de `descricao`, que o usuário pode alterar)
+- `identificador_ocr` (nullable — campo reservado para a futura checagem de duplicados. O fluxo atual aproveita o texto na descrição editável)
 - `imagem_uri` (nullable — **campo local apenas**, caminho da imagem baixada do Supabase Storage; usado para thumbnail no card do item; não é sincronizado com o Supabase)
 - `quantidade`
 - `criado_em`
@@ -170,7 +169,7 @@ A cada mudança de conectividade (via `NetInfo`) ou ação manual do usuário:
 
 ---
 
-## 6. Fluxo completo de OCR e checagem de duplicado (versão final)
+## 6. Fluxo de OCR e evolução planejada
 
 Passo a passo de como o OCR se encaixa, do zero:
 
@@ -179,13 +178,9 @@ Passo a passo de como o OCR se encaixa, do zero:
    - A mesma foto é enviada à Cloud Vision, agora pedindo Text Detection.
    - O texto bruto retornado é salvo em `analises.texto_ocr` — pertence à análise, não ao item ainda.
 3. Na tela de revisão/confirmação, o app mostra nome, tags e (se existir) o texto do OCR como sugestões editáveis, e um campo vazio de **categoria** para o usuário preencher manualmente.
-4. Ao tocar em "Salvar no inventário" (confirmação final), os dados são **copiados** de `analises` para um novo registro em `itens_inventario` (ou usados para atualizar um existente, ver abaixo):
-   - `nome` ← `objeto_detectado`, `tags_json` ← `labels_json`, `descricao` ← `texto_ocr` — todos editáveis a partir daqui, podem divergir do valor original da análise. `categoria` não tem origem automática — é preenchida pelo usuário nesse momento.
-   - `identificador_ocr` ← cópia fixa de `texto_ocr` (só se existir), nunca aparece na tela, serve só para comparação interna.
-5. Checagem de duplicado no momento da confirmação:
-   - Se `identificador_ocr` não é nulo **e** bate com o `identificador_ocr` de um item já existente → entende-se que é o mesmo item físico → **atualiza** o item existente (incrementa `quantidade`, atualiza `atualizado_em`), não cria duplicado.
-   - Caso contrário (sem OCR, ou texto não bate com nenhum item existente) → **cria um novo item** em `itens_inventario`, vinculado à análise de origem via `analise_origem_id`.
-6. Quando não há `identificador_ocr` disponível para comparar, o app não tenta adivinhar duplicado por imagem — apenas mostra, se quiser, uma **contagem informativa por categoria/nome** via `COUNT` agrupado no banco. Isso é só estatística, não identificação de item repetido.
+4. Ao tocar em "Salvar no inventário", o app grava os valores revisados em `itens_inventario`. O campo `analise_origem_id` preserva o vínculo com a análise original.
+
+A checagem futura de duplicados poderá comparar identificadores lidos por OCR entre itens. O cadastro atual não realiza essa comparação.
 
 ---
 
@@ -196,10 +191,10 @@ Passo a passo de como o OCR se encaixa, do zero:
 | Uso correto do Expo SQLite (2,0 pts) | Armazenamento local de `analises` e `itens_inventario`, fila offline, status de sincronização |
 | Integração com Supabase (2,0 pts) | Espelhamento das tabelas, upsert automático ao reconectar, RLS habilitado (sem isolamento por usuário nesta versão) |
 | Resolve problema real (2,0 pts) | Inventário sem código de barras, com diferenciação por OCR entre itens do mesmo tipo |
-| Visão computacional funcionando (4,0 pts) | Detecção de objeto + categorização + OCR complementar via Google Cloud Vision API |
+| Visão computacional funcionando (4,0 pts) | Sugestões de nome e tags e OCR complementar via Google Cloud Vision API |
 
 ---
 
-## 8. Próximos passos (setup)
+## 8. Configuração local
 
-A definir no próximo documento/etapa: instalação do Node/Expo CLI, criação de conta e chave na Google Cloud Vision, criação de projeto no Supabase, estrutura de pastas do app, e teste no celular via Expo Go.
+As instruções de instalação e as variáveis necessárias estão no [README](../README.md#como-executar).

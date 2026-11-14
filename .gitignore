@@ -43,3 +43,8 @@ app-example
 /android
 
 .env
+
+# Materiais locais de apresentação
+/.presentation-build/
+/apresentacao/*
+!/apresentacao/Opticatalog-Apresentacao-Visual-Com-Video.pptx

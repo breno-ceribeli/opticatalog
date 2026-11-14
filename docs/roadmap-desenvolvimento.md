@@ -26,9 +26,9 @@ Este documento é o guia operacional do que precisa ser construído, em ordem, c
 
 ---
 
-## Fase 0 — Setup (ver guia-setup-projeto.md)
+## Fase 0 — Setup
 
-Checklist resumido — detalhes completos no outro documento:
+Checklist resumido. Veja [como executar o projeto](../README.md#como-executar).
 
 - [X] Node.js, Expo Go, projeto Expo criado e rodando no celular
 - [X] Dependências instaladas (`expo-camera`, `expo-image-picker`, `expo-image-manipulator`, `expo-sqlite`, `expo-file-system`, `@react-native-community/netinfo`, `@supabase/supabase-js`, `@react-native-async-storage/async-storage`, `react-native-url-polyfill`)
@@ -112,6 +112,8 @@ Checklist resumido — detalhes completos no outro documento:
 ---
 
 ## Fase 5 — OCR + checagem de duplicado
+
+**Situação atual:** o OCR na revisão está implementado. A checagem de duplicados descrita abaixo ainda está planejada.
 
 **Objetivo:** implementar o botão de OCR e a lógica de duplicado descrita na documentação.
 

@@ -190,7 +190,7 @@ A resposta traz `vertices` com coordenadas em **pixels absolutos** (não normali
 - `fullTextAnnotation.text` — mesmo texto completo, mas com estrutura hierárquica (pages → blocks → paragraphs → words → symbols).
 - `locale` — idioma detectado (ex: "pt", "en").
 
-**Regra de negócio:** usar **apenas `textAnnotations[0].description`** como texto bruto do OCR. Salvar em `analises.texto_ocr` e copiar para `itens_inventario.descricao` e `itens_inventario.identificador_ocr` na confirmação.
+**Regra de negócio:** usar **apenas `textAnnotations[0].description`** como texto bruto do OCR. O app salva o resultado em `analises.texto_ocr` e o sugere na descrição editável do item. O uso de `identificador_ocr` para checagem de duplicados está planejado.
 
 ---
 

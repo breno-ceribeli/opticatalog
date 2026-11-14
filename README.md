@@ -1,5 +1,13 @@
 # Opticatalog
 
+## Integrantes do grupo
+
+- Breno Fernandes Ceribeli
+- Felipe Ribeiro Matsuguma
+- Renan Silva Prado
+
+## Sobre o projeto
+
 O Opticatalog é um aplicativo móvel de inventário visual. Ele usa uma foto para sugerir o nome e as tags de um objeto e pode ler o texto de uma etiqueta para preencher a descrição. A pessoa revisa as sugestões, escolhe a categoria e confirma o cadastro. O projeto foi desenvolvido para uma disciplina de graduação.
 
 ## Apresentação e demonstração
